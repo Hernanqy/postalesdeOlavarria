@@ -12,6 +12,7 @@ const SCENES = [
     lng: -60.3225,
     radiusMeters: 400,
     theme: "megafauna",
+    background: "/assets/fondos/megafauna-fondo.jpg",
   },
   {
     id: "museo-emiliozzi",
@@ -22,6 +23,7 @@ const SCENES = [
     lng: -60.3215,
     radiusMeters: 400,
     theme: "emiliozzi",
+    background: "/assets/fondos/emiliozzi-fondo.jpg",
   },
 ];
 
@@ -343,7 +345,7 @@ function App() {
 
       await drawThemeBackground(ctx, width, height, scene);
       drawCapturedPeople(ctx, base, width, height);
-      drawForegroundTheme(ctx, width, height, scene);
+      drawThemeColorOverlay(ctx, width, height, scene);
       drawVignette(ctx, width, height);
       drawPostalFrame(ctx, width, height);
       drawSceneText(ctx, width, height, scene.postalTitle, scene.postalSubtitle);
@@ -359,47 +361,56 @@ function App() {
     }
   }
 
+  async function drawThemeBackground(ctx, width, height, scene) {
+    try {
+      const fondo = await loadImage(scene.background);
+      drawCoverImage(ctx, fondo, width, height);
+    } catch (err) {
+      console.error("No se pudo cargar el fondo:", err);
+
+      if (scene.theme === "emiliozzi") {
+        drawEmiliozziFallbackBackground(ctx, width, height);
+        return;
+      }
+
+      drawMegafaunaFallbackBackground(ctx, width, height);
+    }
+  }
+
   function drawCapturedPeople(ctx, base, width, height) {
-    // En esta prueba sin IA usamos la foto real completa,
-    // pero la fusionamos con el fondo temático.
-    // Más adelante podemos recortar la persona si sumamos segmentación local.
     ctx.save();
 
-    ctx.globalAlpha = 0.92;
+    /*
+      La foto real se mezcla con el fondo.
+      Si querés que se vea más la foto real, subí este número.
+      Si querés que se vea más el fondo temático, bajalo.
+    */
+    ctx.globalAlpha = 0.42;
     ctx.drawImage(base, 0, 0, width, height);
 
-    // Mezcla de color para que parezca postal.
     ctx.globalCompositeOperation = "soft-light";
-    ctx.fillStyle = "rgba(255, 210, 31, 0.22)";
+    ctx.globalAlpha = 0.45;
+    ctx.fillStyle = "rgba(255, 210, 31, 0.25)";
     ctx.fillRect(0, 0, width, height);
 
-    ctx.globalCompositeOperation = "source-over";
     ctx.restore();
   }
 
- async function drawThemeBackground(ctx, width, height, scene) {
-  try {
-    if (scene.theme === "emiliozzi") {
-      const fondo = await loadImage("/assets/fondos/emiliozzi-fondo.jpg");
-      drawCoverImage(ctx, fondo, width, height);
-      return;
-    }
-
-    const fondo = await loadImage("/assets/fondos/megafauna-fondo.jpg");
-    drawCoverImage(ctx, fondo, width, height);
-  } catch (err) {
-    console.error("No se pudo cargar el fondo:", err);
+  function drawThemeColorOverlay(ctx, width, height, scene) {
+    ctx.save();
 
     if (scene.theme === "emiliozzi") {
-      drawEmiliozziBackground(ctx, width, height);
-      return;
+      ctx.fillStyle = "rgba(40, 34, 30, 0.22)";
+      ctx.fillRect(0, 0, width, height);
+    } else {
+      ctx.fillStyle = "rgba(255, 205, 80, 0.12)";
+      ctx.fillRect(0, 0, width, height);
     }
 
-    drawMegafaunaBackground(ctx, width, height);
+    ctx.restore();
   }
-}
 
-  function drawMegafaunaBackground(ctx, width, height) {
+  function drawMegafaunaFallbackBackground(ctx, width, height) {
     const sky = ctx.createLinearGradient(0, 0, 0, height);
     sky.addColorStop(0, "#f9efe6");
     sky.addColorStop(0.5, "#f7e4c8");
@@ -407,34 +418,9 @@ function App() {
 
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, width, height);
-
-    ctx.save();
-
-    ctx.fillStyle = "rgba(18, 155, 227, 0.18)";
-    ctx.beginPath();
-    ctx.ellipse(width * 0.32, height * 0.62, width * 0.42, height * 0.18, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "rgba(39, 168, 68, 0.22)";
-    ctx.beginPath();
-    ctx.ellipse(width * 0.75, height * 0.70, width * 0.48, height * 0.20, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "rgba(255, 210, 31, 0.28)";
-    ctx.beginPath();
-    ctx.ellipse(width * 0.48, height * 0.82, width * 0.55, height * 0.20, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Sol
-    ctx.fillStyle = "rgba(255, 210, 31, 0.65)";
-    ctx.beginPath();
-    ctx.arc(width * 0.82, height * 0.18, width * 0.08, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
   }
 
-  function drawEmiliozziBackground(ctx, width, height) {
+  function drawEmiliozziFallbackBackground(ctx, width, height) {
     const bg = ctx.createLinearGradient(0, 0, 0, height);
     bg.addColorStop(0, "#f8f8f8");
     bg.addColorStop(0.55, "#dceef8");
@@ -442,110 +428,6 @@ function App() {
 
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, width, height);
-
-    ctx.save();
-
-    // pista
-    ctx.fillStyle = "rgba(63, 48, 56, 0.28)";
-    ctx.beginPath();
-    ctx.moveTo(0, height * 0.72);
-    ctx.lineTo(width, height * 0.58);
-    ctx.lineTo(width, height);
-    ctx.lineTo(0, height);
-    ctx.closePath();
-    ctx.fill();
-
-    // líneas
-    ctx.strokeStyle = "rgba(255,255,255,0.65)";
-    ctx.lineWidth = width * 0.012;
-    ctx.beginPath();
-    ctx.moveTo(width * 0.1, height * 0.84);
-    ctx.lineTo(width * 0.9, height * 0.68);
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  function drawForegroundTheme(ctx, width, height, scene) {
-    if (scene.theme === "emiliozzi") {
-      drawEmiliozziForeground(ctx, width, height);
-      return;
-    }
-
-    drawMegafaunaForeground(ctx, width, height);
-  }
-
-  function drawMegafaunaForeground(ctx, width, height) {
-    ctx.save();
-
-    // pasto inferior
-    ctx.fillStyle = "rgba(39, 168, 68, 0.30)";
-    ctx.beginPath();
-    ctx.ellipse(width * 0.5, height * 1.02, width * 0.62, height * 0.18, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // silueta de hueso / fósil
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.68)";
-    ctx.lineWidth = width * 0.018;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(width * 0.08, height * 0.76);
-    ctx.lineTo(width * 0.24, height * 0.72);
-    ctx.stroke();
-
-    ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
-    ctx.beginPath();
-    ctx.arc(width * 0.07, height * 0.76, width * 0.03, 0, Math.PI * 2);
-    ctx.arc(width * 0.25, height * 0.72, width * 0.03, 0, Math.PI * 2);
-    ctx.fill();
-
-    // polvo / atmósfera
-    for (let i = 0; i < 26; i++) {
-      const x = width * randomFrom(i, 0.05, 0.95);
-      const y = height * randomFrom(i + 9, 0.20, 0.72);
-      const r = width * randomFrom(i + 3, 0.004, 0.012);
-
-      ctx.fillStyle = "rgba(255,255,255,0.32)";
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.restore();
-  }
-
-  function drawEmiliozziForeground(ctx, width, height) {
-    ctx.save();
-
-    // ruedas / auto simplificado en primer plano
-    ctx.fillStyle = "rgba(63, 48, 56, 0.86)";
-    ctx.beginPath();
-    ctx.roundRect(width * 0.12, height * 0.66, width * 0.36, height * 0.11, width * 0.04);
-    ctx.fill();
-
-    ctx.fillStyle = "rgba(18, 155, 227, 0.90)";
-    ctx.beginPath();
-    ctx.roundRect(width * 0.18, height * 0.58, width * 0.20, height * 0.10, width * 0.04);
-    ctx.fill();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.arc(width * 0.20, height * 0.78, width * 0.045, 0, Math.PI * 2);
-    ctx.arc(width * 0.42, height * 0.78, width * 0.045, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "rgba(63, 48, 56, 0.9)";
-    ctx.beginPath();
-    ctx.arc(width * 0.20, height * 0.78, width * 0.025, 0, Math.PI * 2);
-    ctx.arc(width * 0.42, height * 0.78, width * 0.025, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  function randomFrom(seed, min, max) {
-    const x = Math.sin(seed * 999) * 10000;
-    return min + (x - Math.floor(x)) * (max - min);
   }
 
   function clamp(value, min, max) {
@@ -565,28 +447,28 @@ function App() {
   }
 
   function drawCoverImage(ctx, img, canvasWidth, canvasHeight) {
-  const imageRatio = img.width / img.height;
-  const canvasRatio = canvasWidth / canvasHeight;
+    const imageRatio = img.width / img.height;
+    const canvasRatio = canvasWidth / canvasHeight;
 
-  let drawWidth;
-  let drawHeight;
-  let drawX;
-  let drawY;
+    let drawWidth;
+    let drawHeight;
+    let drawX;
+    let drawY;
 
-  if (imageRatio > canvasRatio) {
-    drawHeight = canvasHeight;
-    drawWidth = canvasHeight * imageRatio;
-    drawX = (canvasWidth - drawWidth) / 2;
-    drawY = 0;
-  } else {
-    drawWidth = canvasWidth;
-    drawHeight = canvasWidth / imageRatio;
-    drawX = 0;
-    drawY = (canvasHeight - drawHeight) / 2;
+    if (imageRatio > canvasRatio) {
+      drawHeight = canvasHeight;
+      drawWidth = canvasHeight * imageRatio;
+      drawX = (canvasWidth - drawWidth) / 2;
+      drawY = 0;
+    } else {
+      drawWidth = canvasWidth;
+      drawHeight = canvasWidth / imageRatio;
+      drawX = 0;
+      drawY = (canvasHeight - drawHeight) / 2;
+    }
+
+    ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
   }
-
-  ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-}
 
   function drawVignette(ctx, width, height) {
     const gradient = ctx.createRadialGradient(
@@ -701,7 +583,9 @@ function App() {
               {locationStatus === "detecting" && (
                 <>
                   <h2>Buscando tu lugar…</h2>
-                  <p>Permití la ubicación para cargar la postal correspondiente.</p>
+                  <p>
+                    Permití la ubicación para cargar la postal correspondiente.
+                  </p>
                 </>
               )}
 
@@ -782,8 +666,6 @@ function App() {
               </div>
 
               <div className="overlay">
-                
-
                 {activeGuides.map((guide) => (
                   <div
                     key={guide.id}
@@ -794,7 +676,9 @@ function App() {
                       width: `${guide.w}%`,
                       height: `${guide.h}%`,
                     }}
-                    onPointerDown={(event) => startDraggingGuide(event, guide.id)}
+                    onPointerDown={(event) =>
+                      startDraggingGuide(event, guide.id)
+                    }
                   >
                     <span className="dragHint">{guide.label}</span>
                   </div>

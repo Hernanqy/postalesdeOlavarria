@@ -313,12 +313,14 @@ useEffect(() => {
       setFinalImage(result);
       setStatus("result");
     } catch (err) {
-      console.error(err);
-      setError(
-        `No se pudo crear la postal. Revisá que exista el archivo: ${currentSpace.frame}`
-      );
-      setStatus("camera");
-    }
+  console.error(err);
+  setError(
+    `No se pudo crear la postal. Falta o falla este marco: ${currentSpace.frame}`
+  );
+
+  // Volvemos al inicio para evitar cámara negra.
+  setStatus("idle");
+}
   }
 
   function drawPhotoInsideCenter(ctx, img, width, height) {

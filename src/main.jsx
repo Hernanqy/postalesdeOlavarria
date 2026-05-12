@@ -947,7 +947,7 @@ function App() {
 
             {status !== "idle" && status !== "result" && (
               <button className="secondary full" onClick={reset}>
-                Reiniciar
+                Reiniciar_
               </button>
             )}
           </div>

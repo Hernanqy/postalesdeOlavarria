@@ -62,7 +62,6 @@ function App() {
     canvas.height = height;
 
     const ctx = canvas.getContext("2d");
-
     ctx.drawImage(video, 0, 0, width, height);
 
     const capturedImage = canvas.toDataURL("image/jpeg", 0.92);
@@ -84,34 +83,32 @@ function App() {
     try {
       const base = await loadImage(capturedImage);
 
-      // 1. Foto original
+      // Foto original
       ctx.drawImage(base, 0, 0, width, height);
 
-      // 2. Tono general para unificar la escena
+      // Tono general
       ctx.fillStyle = "rgba(70, 43, 18, 0.18)";
       ctx.fillRect(0, 0, width, height);
 
-      // 3. PNG real del gliptodonte
-      const gliptodonte = await loadImage(
+      // Cargar gliptodonte removiendo fondo blanco/claro
+      const gliptodonte = await loadImageWithoutLightBackground(
         "/assets/personajes/gliptodonte.png"
       );
 
       drawPng(
         ctx,
         gliptodonte,
-        width * 0.04,  // posición X
-        height * 0.50, // posición Y
-        width * 0.34,  // ancho
-        height * 0.30  // alto
+        width * 0.04,
+        height * 0.50,
+        width * 0.34,
+        height * 0.30
       );
 
-      // 4. Efectos finales
       drawVignette(ctx, width, height);
       drawPostalFrame(ctx, width, height);
       drawText(ctx, width, height);
 
       const result = canvas.toDataURL("image/png");
-
       setFinalImage(result);
       setStatus("result");
     } catch (err) {
@@ -137,10 +134,62 @@ function App() {
     });
   }
 
+  function loadImageWithoutLightBackground(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+
+      img.onload = () => {
+        const tempCanvas = document.createElement("canvas");
+        const tempCtx = tempCanvas.getContext("2d");
+
+        tempCanvas.width = img.width;
+        tempCanvas.height = img.height;
+
+        tempCtx.drawImage(img, 0, 0);
+
+        const imageData = tempCtx.getImageData(
+          0,
+          0,
+          tempCanvas.width,
+          tempCanvas.height
+        );
+
+        const data = imageData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const a = data[i + 3];
+
+          if (a === 0) continue;
+
+          const isVeryLight = r > 210 && g > 210 && b > 210;
+          const colorDifference = Math.max(r, g, b) - Math.min(r, g, b);
+          const isNeutralLight = isVeryLight && colorDifference < 25;
+
+          if (isNeutralLight) {
+            data[i + 3] = 0;
+          }
+        }
+
+        tempCtx.putImageData(imageData, 0, 0);
+
+        const cleanedImg = new Image();
+
+        cleanedImg.onload = () => resolve(cleanedImg);
+        cleanedImg.onerror = reject;
+        cleanedImg.src = tempCanvas.toDataURL("image/png");
+      };
+
+      img.onerror = () => reject(new Error("No se pudo cargar la imagen: " + src));
+      img.src = src;
+    });
+  }
+
   function drawPng(ctx, img, x, y, w, h) {
     ctx.save();
 
-    // Sombra para que el PNG no parezca tan pegado
     ctx.shadowColor = "rgba(0,0,0,0.45)";
     ctx.shadowBlur = 18;
     ctx.shadowOffsetX = 8;
@@ -304,8 +353,8 @@ function App() {
             <h2>Foto guiada + gliptodonte PNG</h2>
 
             <p>
-              Esta versión usa tu PNG real ubicado en{" "}
-              <strong>public/assets/personajes/gliptodonte.png</strong>.
+              Esta versión intenta borrar automáticamente el fondo blanco/claro
+              del archivo <strong>gliptodonte.png</strong>.
             </p>
 
             <div className="steps">

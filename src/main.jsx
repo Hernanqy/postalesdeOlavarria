@@ -401,6 +401,8 @@ function App() {
 
       await drawThemeBackground(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, scene);
 
+      drawGroundShadows(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+
       const cutoutCanvas = await segmentPeopleFromImage(
         capturedImage,
         sourceWidth,
@@ -413,10 +415,11 @@ function App() {
         sourceWidth,
         sourceHeight,
         OUTPUT_WIDTH,
-        OUTPUT_HEIGHT
+        OUTPUT_HEIGHT,
+        scene.theme
       );
 
-      drawGroundShadows(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+      drawAtmosphereOverlay(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, scene.theme);
       drawVignette(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
       drawPostalFrame(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
       drawSceneText(
@@ -456,13 +459,13 @@ function App() {
         try {
           cutoutCtx.clearRect(0, 0, sourceWidth, sourceHeight);
 
-          const maskCanvas = document.createElement("canvas");
-          const maskCtx = maskCanvas.getContext("2d");
+          const rawMaskCanvas = document.createElement("canvas");
+          const rawMaskCtx = rawMaskCanvas.getContext("2d");
 
-          maskCanvas.width = sourceWidth;
-          maskCanvas.height = sourceHeight;
+          rawMaskCanvas.width = sourceWidth;
+          rawMaskCanvas.height = sourceHeight;
 
-          maskCtx.drawImage(
+          rawMaskCtx.drawImage(
             results.segmentationMask,
             0,
             0,
@@ -470,7 +473,7 @@ function App() {
             sourceHeight
           );
 
-          const maskData = maskCtx.getImageData(
+          const maskData = rawMaskCtx.getImageData(
             0,
             0,
             sourceWidth,
@@ -482,24 +485,45 @@ function App() {
           for (let i = 0; i < data.length; i += 4) {
             const value = data[i];
 
-            if (value > 120) {
-              data[i] = 255;
-              data[i + 1] = 255;
-              data[i + 2] = 255;
-              data[i + 3] = 255;
-            } else {
-              data[i] = 0;
-              data[i + 1] = 0;
-              data[i + 2] = 0;
-              data[i + 3] = 0;
+            let alpha = 0;
+
+            if (value > 70) {
+              alpha = Math.min(255, Math.max(0, (value - 70) * 1.7));
             }
+
+            data[i] = 255;
+            data[i + 1] = 255;
+            data[i + 2] = 255;
+            data[i + 3] = alpha;
           }
 
-          maskCtx.putImageData(maskData, 0, 0);
+          rawMaskCtx.putImageData(maskData, 0, 0);
 
-          cutoutCtx.drawImage(maskCanvas, 0, 0, sourceWidth, sourceHeight);
-          cutoutCtx.globalCompositeOperation = "source-in";
+          const softMaskCanvas = document.createElement("canvas");
+          const softMaskCtx = softMaskCanvas.getContext("2d");
+
+          softMaskCanvas.width = sourceWidth;
+          softMaskCanvas.height = sourceHeight;
+
+          softMaskCtx.filter = "blur(5px)";
+          softMaskCtx.drawImage(
+            rawMaskCanvas,
+            0,
+            0,
+            sourceWidth,
+            sourceHeight
+          );
+          softMaskCtx.filter = "none";
+
           cutoutCtx.drawImage(results.image, 0, 0, sourceWidth, sourceHeight);
+          cutoutCtx.globalCompositeOperation = "destination-in";
+          cutoutCtx.drawImage(
+            softMaskCanvas,
+            0,
+            0,
+            sourceWidth,
+            sourceHeight
+          );
           cutoutCtx.globalCompositeOperation = "source-over";
 
           resolve(cutoutCanvas);
@@ -534,35 +558,70 @@ function App() {
     sourceWidth,
     sourceHeight,
     outputWidth,
-    outputHeight
+    outputHeight,
+    theme
   ) {
     const activeGuides = guides.slice(0, peopleCount);
 
-    activeGuides.forEach((guide) => {
+    activeGuides.forEach((guide, index) => {
       const sourceRect = guideToSourceRect(guide, sourceWidth, sourceHeight);
-      const outputRect = guideToOutputRect(guide, outputWidth, outputHeight);
+      const outputRect = guideToOutputRect(
+        guide,
+        outputWidth,
+        outputHeight,
+        index
+      );
+
+      const personLayer = createSoftPersonLayer(cutoutCanvas, sourceRect, theme);
+
+      drawPersonShadow(ctx, outputRect);
 
       ctx.save();
-
-      ctx.shadowColor = "rgba(0,0,0,0.42)";
-      ctx.shadowBlur = 22;
-      ctx.shadowOffsetX = 8;
-      ctx.shadowOffsetY = 14;
-
+      ctx.filter = "saturate(0.97) contrast(1.02) brightness(0.98)";
       ctx.drawImage(
-        cutoutCanvas,
-        sourceRect.x,
-        sourceRect.y,
-        sourceRect.w,
-        sourceRect.h,
+        personLayer,
         outputRect.x,
         outputRect.y,
         outputRect.w,
         outputRect.h
       );
-
       ctx.restore();
     });
+  }
+
+  function createSoftPersonLayer(cutoutCanvas, sourceRect, theme) {
+    const layer = document.createElement("canvas");
+    const layerCtx = layer.getContext("2d");
+
+    layer.width = Math.max(1, Math.round(sourceRect.w));
+    layer.height = Math.max(1, Math.round(sourceRect.h));
+
+    layerCtx.clearRect(0, 0, layer.width, layer.height);
+
+    layerCtx.filter = "blur(0.8px)";
+    layerCtx.drawImage(
+      cutoutCanvas,
+      sourceRect.x,
+      sourceRect.y,
+      sourceRect.w,
+      sourceRect.h,
+      0,
+      0,
+      layer.width,
+      layer.height
+    );
+    layerCtx.filter = "none";
+
+    layerCtx.globalCompositeOperation = "source-atop";
+    layerCtx.fillStyle =
+      theme === "emiliozzi"
+        ? "rgba(120, 95, 70, 0.08)"
+        : "rgba(214, 176, 88, 0.10)";
+    layerCtx.fillRect(0, 0, layer.width, layer.height);
+
+    layerCtx.globalCompositeOperation = "source-over";
+
+    return layer;
   }
 
   function guideToSourceRect(guide, sourceWidth, sourceHeight) {
@@ -582,14 +641,14 @@ function App() {
     };
   }
 
-  function guideToOutputRect(guide, outputWidth, outputHeight) {
-    const scale = peopleCount === 1 ? 0.86 : 0.76;
+  function guideToOutputRect(guide, outputWidth, outputHeight, index = 0) {
+    const scale = peopleCount === 1 ? 0.68 : 0.58;
 
     const h = outputHeight * scale;
-    const w = h * 0.45;
+    const w = h * 0.42;
 
     const x = outputWidth * (guide.x / 100) - w / 2;
-    const y = outputHeight * 0.18;
+    const y = outputHeight * 0.23;
 
     return {
       x,
@@ -617,12 +676,59 @@ function App() {
         width * 0.14
       );
 
-      gradient.addColorStop(0, "rgba(0,0,0,0.22)");
+      gradient.addColorStop(0, "rgba(0,0,0,0.16)");
       gradient.addColorStop(1, "rgba(0,0,0,0)");
 
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, width, height);
     });
+
+    ctx.restore();
+  }
+
+  function drawPersonShadow(ctx, outputRect) {
+    ctx.save();
+
+    const shadowX = outputRect.x + outputRect.w * 0.5;
+    const shadowY = outputRect.y + outputRect.h * 0.96;
+    const shadowW = outputRect.w * 0.72;
+    const shadowH = outputRect.h * 0.08;
+
+    const gradient = ctx.createRadialGradient(
+      shadowX,
+      shadowY,
+      shadowW * 0.12,
+      shadowX,
+      shadowY,
+      shadowW
+    );
+
+    gradient.addColorStop(0, "rgba(0,0,0,0.22)");
+    gradient.addColorStop(1, "rgba(0,0,0,0)");
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.ellipse(shadowX, shadowY, shadowW, shadowH, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawAtmosphereOverlay(ctx, width, height, theme) {
+    ctx.save();
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+
+    if (theme === "emiliozzi") {
+      gradient.addColorStop(0, "rgba(255,255,255,0.03)");
+      gradient.addColorStop(1, "rgba(120,95,70,0.08)");
+    } else {
+      gradient.addColorStop(0, "rgba(255,230,170,0.04)");
+      gradient.addColorStop(1, "rgba(181,140,70,0.10)");
+    }
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
 
     ctx.restore();
   }
@@ -638,7 +744,7 @@ function App() {
     );
 
     gradient.addColorStop(0, "rgba(0,0,0,0)");
-    gradient.addColorStop(1, "rgba(0,0,0,0.24)");
+    gradient.addColorStop(1, "rgba(0,0,0,0.22)");
 
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
@@ -921,7 +1027,7 @@ function App() {
             <div className="processing">
               <div className="spinner"></div>
               <h2>Creando postal…</h2>
-              <p>Recortando personas y armando la escena.</p>
+              <p>Suavizando recorte y armando la escena.</p>
             </div>
           )}
 
@@ -936,7 +1042,7 @@ function App() {
           <div>
             <p className="tag">Postal automática</p>
 
-            <h2>Recorte automático V22</h2>
+            <h2>Recorte automático V23</h2>
 
             {currentScene ? (
               <div className="detectedCard">

@@ -62,6 +62,7 @@ function App() {
     canvas.height = height;
 
     const ctx = canvas.getContext("2d");
+
     ctx.drawImage(video, 0, 0, width, height);
 
     const capturedImage = canvas.toDataURL("image/jpeg", 0.92);
@@ -73,116 +74,79 @@ function App() {
     }, 500);
   }
 
-  function createPostal(capturedImage, width, height) {
+  async function createPostal(capturedImage, width, height) {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
     canvas.width = width;
     canvas.height = height;
 
-    const base = new Image();
+    try {
+      const base = await loadImage(capturedImage);
 
-    base.onload = () => {
+      // 1. Foto original
       ctx.drawImage(base, 0, 0, width, height);
 
-      // Tono general
+      // 2. Tono general para unificar la escena
       ctx.fillStyle = "rgba(70, 43, 18, 0.18)";
       ctx.fillRect(0, 0, width, height);
 
-      drawBackgroundElement(ctx, width, height);
-      drawSimpleCharacter(ctx, width, height);
+      // 3. PNG real del gliptodonte
+      const gliptodonte = await loadImage(
+        "/assets/personajes/gliptodonte.png"
+      );
+
+      drawPng(
+        ctx,
+        gliptodonte,
+        width * 0.04,  // posición X
+        height * 0.50, // posición Y
+        width * 0.34,  // ancho
+        height * 0.30  // alto
+      );
+
+      // 4. Efectos finales
       drawVignette(ctx, width, height);
       drawPostalFrame(ctx, width, height);
       drawText(ctx, width, height);
 
       const result = canvas.toDataURL("image/png");
+
       setFinalImage(result);
       setStatus("result");
-    };
-
-    base.src = capturedImage;
-  }
-
-  function drawSimpleCharacter(ctx, width, height) {
-    const x = width * 0.07;
-    const y = height * 0.48;
-    const w = width * 0.24;
-    const h = height * 0.25;
-
-    ctx.save();
-    ctx.globalAlpha = 0.92;
-
-    // Sombra
-    ctx.fillStyle = "rgba(0,0,0,0.30)";
-    ctx.beginPath();
-    ctx.ellipse(
-      x + w * 0.55,
-      y + h * 1.05,
-      w * 0.55,
-      h * 0.12,
-      0,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-
-    // Cuerpo tipo personaje placeholder
-    ctx.fillStyle = "rgba(116, 79, 50, 0.96)";
-    ctx.beginPath();
-    ctx.ellipse(
-      x + w * 0.5,
-      y + h * 0.55,
-      w * 0.48,
-      h * 0.38,
-      0,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-
-    // Cabeza
-    ctx.fillStyle = "rgba(145, 100, 63, 0.96)";
-    ctx.beginPath();
-    ctx.ellipse(
-      x + w * 0.8,
-      y + h * 0.33,
-      w * 0.22,
-      h * 0.2,
-      0,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-
-    // Patas
-    ctx.fillStyle = "rgba(65, 45, 31, 0.96)";
-    for (let i = 0; i < 4; i++) {
-      ctx.fillRect(
-        x + w * (0.23 + i * 0.14),
-        y + h * 0.75,
-        w * 0.07,
-        h * 0.23
+    } catch (err) {
+      console.error(err);
+      setError(
+        "No se pudo cargar gliptodonte.png. Revisá que esté en public/assets/personajes/gliptodonte.png"
       );
+      setStatus("camera");
     }
-
-    ctx.restore();
   }
 
-  function drawBackgroundElement(ctx, width, height) {
-    ctx.save();
-    ctx.globalAlpha = 0.55;
-    ctx.fillStyle = "rgba(245, 224, 180, 0.40)";
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
 
-    ctx.beginPath();
-    ctx.moveTo(width * 0.66, height * 0.6);
-    ctx.lineTo(width * 0.76, height * 0.34);
-    ctx.lineTo(width * 0.86, height * 0.6);
-    ctx.lineTo(width * 0.94, height * 0.43);
-    ctx.lineTo(width, height * 0.62);
-    ctx.lineTo(width, height);
-    ctx.lineTo(width * 0.66, height);
-    ctx.closePath();
-    ctx.fill();
+      img.onload = () => resolve(img);
+
+      img.onerror = () => {
+        reject(new Error("No se pudo cargar la imagen: " + src));
+      };
+
+      img.src = src;
+    });
+  }
+
+  function drawPng(ctx, img, x, y, w, h) {
+    ctx.save();
+
+    // Sombra para que el PNG no parezca tan pegado
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetX = 8;
+    ctx.shadowOffsetY = 10;
+
+    ctx.drawImage(img, x, y, w, h);
 
     ctx.restore();
   }
@@ -246,8 +210,34 @@ function App() {
     link.click();
   }
 
+  async function sharePostal() {
+    if (!finalImage) return;
+
+    try {
+      const response = await fetch(finalImage);
+      const blob = await response.blob();
+      const file = new File([blob], "postal-viva.png", {
+        type: "image/png",
+      });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: "Postal Viva",
+          text: "Mi postal generada",
+          files: [file],
+        });
+      } else {
+        downloadPostal();
+      }
+    } catch (err) {
+      console.error(err);
+      downloadPostal();
+    }
+  }
+
   function reset() {
     setFinalImage(null);
+    setError("");
     setStatus(stream ? "camera" : "idle");
   }
 
@@ -281,12 +271,12 @@ function App() {
               <div className="overlay">
                 <div className="safePerson"></div>
 
-                <div className="leftZone">Personaje</div>
+                <div className="leftZone">Gliptodonte</div>
                 <div className="rightZone">Fondo</div>
 
                 <div className="instructions">
                   <strong>Ubicá a la persona dentro de la silueta</strong>
-                  <span>Los personajes aparecerán en los laterales.</span>
+                  <span>El gliptodonte aparecerá a la izquierda.</span>
                 </div>
               </div>
             </div>
@@ -296,7 +286,7 @@ function App() {
             <div className="processing">
               <div className="spinner"></div>
               <h2>Creando postal…</h2>
-              <p>Agregando escena, personaje, marco y color.</p>
+              <p>Agregando gliptodonte, marco y color.</p>
             </div>
           )}
 
@@ -311,27 +301,26 @@ function App() {
           <div>
             <p className="tag">MVP básico</p>
 
-            <h2>Foto guiada + postal automática</h2>
+            <h2>Foto guiada + gliptodonte PNG</h2>
 
             <p>
-              Esta versión no usa IA. Controla la composición con una zona
-              central segura para la persona y elementos agregados en los
-              laterales.
+              Esta versión usa tu PNG real ubicado en{" "}
+              <strong>public/assets/personajes/gliptodonte.png</strong>.
             </p>
 
             <div className="steps">
               <div>
-                <strong>1. Guía de encuadre</strong>
-                <span>La persona queda en el centro.</span>
+                <strong>1. Cámara</strong>
+                <span>La persona se ubica en el centro.</span>
               </div>
 
               <div>
-                <strong>2. Zonas seguras</strong>
-                <span>Los agregados aparecen a los lados.</span>
+                <strong>2. PNG</strong>
+                <span>El gliptodonte aparece en la zona izquierda.</span>
               </div>
 
               <div>
-                <strong>3. Postal final</strong>
+                <strong>3. Postal</strong>
                 <span>Se genera una imagen descargable.</span>
               </div>
             </div>
@@ -350,6 +339,10 @@ function App() {
                   ⬇️ Descargar postal
                 </button>
 
+                <button className="secondary full" onClick={sharePostal}>
+                  📤 Compartir
+                </button>
+
                 <button className="secondary full" onClick={reset}>
                   🔄 Tomar otra foto
                 </button>
@@ -362,6 +355,8 @@ function App() {
               </button>
             )}
           </div>
+
+          {error && <p className="error">{error}</p>}
         </div>
       </section>
 

@@ -9,9 +9,6 @@
   --green: #27a844;
   --dark: #3f3038;
   --cream: #fff8f4;
-  --soft-blue: #dff3ff;
-  --soft-green: #e8f7dd;
-  --soft-yellow: #fff3bf;
 }
 
 body {
@@ -247,16 +244,19 @@ p {
   font-size: 18px;
   font-weight: 900;
   box-shadow: 0 12px 0 rgba(63, 48, 56, 0.14);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.startButton:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 0 rgba(63, 48, 56, 0.12);
-}
-
-.startButton span {
-  font-size: 24px;
+.demoButton {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 15px 24px;
+  background: #f2eef0;
+  color: var(--dark);
+  font-size: 16px;
+  font-weight: 900;
 }
 
 .primary,
@@ -345,12 +345,37 @@ video {
 .safePerson {
   position: absolute;
   transform: translate(-50%, -50%);
-  border: 5px dashed rgba(255, 255, 255, 0.86);
+  border: 5px dashed rgba(255, 255, 255, 0.92);
   border-radius: 999px;
   box-shadow:
     0 0 0 9999px rgba(0, 0, 0, 0.12),
     0 0 0 10px rgba(18, 155, 227, 0.28);
-  transition: all 0.15s ease;
+  touch-action: none;
+  cursor: grab;
+  z-index: 7;
+}
+
+.safePerson:active {
+  cursor: grabbing;
+  border-color: var(--yellow);
+  box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0.12),
+    0 0 0 12px rgba(255, 210, 31, 0.38);
+}
+
+.dragHint {
+  position: absolute;
+  left: 50%;
+  top: -44px;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
 }
 
 .leftZone {
@@ -396,59 +421,6 @@ video {
   font-size: 14px;
 }
 
-.guideControls {
-  position: absolute;
-  right: 18px;
-  bottom: 116px;
-  z-index: 7;
-  width: 128px;
-  padding: 14px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18);
-}
-
-.guideControlsTitle {
-  text-align: center;
-  font-size: 12px;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--blue);
-  margin-bottom: 10px;
-}
-
-.guideRow {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.guideBtn {
-  width: 38px;
-  height: 38px;
-  border-radius: 14px;
-  background: #f4f1f3;
-  color: var(--dark);
-  font-size: 20px;
-  font-weight: 900;
-}
-
-.sizeBtn {
-  background: var(--yellow);
-}
-
-.guideResetBtn {
-  width: 100%;
-  border-radius: 14px;
-  padding: 10px 0;
-  background: var(--blue);
-  color: white;
-  font-size: 13px;
-  font-weight: 900;
-}
-
 .captureButton {
   position: absolute;
   z-index: 8;
@@ -466,7 +438,6 @@ video {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
 .captureButton span {
@@ -559,35 +530,31 @@ video {
   letter-spacing: -0.05em;
 }
 
-.placeCard {
+.detectedCard {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-top: 14px;
-  padding: 16px;
-  border-radius: 24px;
+  margin: 24px 0;
+  padding: 18px;
+  border-radius: 26px;
   background: white;
-  border: 3px solid transparent;
+  border: 3px solid var(--yellow);
   box-shadow: 0 10px 28px rgba(63, 48, 56, 0.08);
 }
 
-.placeCard.active {
-  border-color: var(--yellow);
-}
-
-.placeCard strong,
-.placeCard small {
+.detectedCard strong,
+.detectedCard small {
   display: block;
 }
 
-.placeCard strong {
+.detectedCard strong {
   color: var(--dark);
-  font-size: 16px;
+  font-size: 18px;
 }
 
-.placeCard small {
+.detectedCard small {
   color: #7e6d74;
-  margin-top: 3px;
+  margin-top: 4px;
 }
 
 .pin {
@@ -617,10 +584,6 @@ video {
 
 .pin.blue {
   background: var(--blue);
-}
-
-.pin.green {
-  background: var(--green);
 }
 
 .actions {
@@ -672,13 +635,6 @@ video {
 
   .instructions {
     bottom: 126px;
-  }
-
-  .guideControls {
-    right: 10px;
-    bottom: 116px;
-    width: 120px;
-    padding: 12px;
   }
 
   .captureButton {

@@ -2,9 +2,46 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
+const SCENES = [
+  {
+    id: "museo-ciencias",
+    name: "Museo de Ciencias",
+    postalTitle: "Museo de Ciencias",
+    postalSubtitle: "Megafauna · Gliptodonte",
+    lat: -36.8927,
+    lng: -60.3225,
+    radiusMeters: 400,
+    character: "/assets/personajes/gliptodonte.png",
+    characterBox: {
+      x: 0.01,
+      y: 0.42,
+      w: 0.46,
+      h: 0.42,
+    },
+  },
+  {
+    id: "museo-emiliozzi",
+    name: "Museo Emiliozzi",
+    postalTitle: "Museo Emiliozzi",
+    postalSubtitle: "Hermanos Emiliozzi",
+    lat: -36.8935,
+    lng: -60.3215,
+    radiusMeters: 400,
+    character: "/assets/personajes/gliptodonte.png",
+    characterBox: {
+      x: 0.58,
+      y: 0.35,
+      w: 0.34,
+      h: 0.48,
+    },
+  },
+];
+
 function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const cameraBoxRef = useRef(null);
+  const draggingGuideRef = useRef(false);
 
   const [stream, setStream] = useState(null);
   const [status, setStatus] = useState("idle");
@@ -12,11 +49,29 @@ function App() {
   const [error, setError] = useState("");
   const [isCapturing, setIsCapturing] = useState(false);
 
-  // encuadre editable
+  const [currentScene, setCurrentScene] = useState(null);
+  const [locationStatus, setLocationStatus] = useState("pending");
+
   const [guideX, setGuideX] = useState(50);
   const [guideY, setGuideY] = useState(50);
-  const [guideW, setGuideW] = useState(34);
-  const [guideH, setGuideH] = useState(70);
+  const [guideW] = useState(34);
+  const [guideH] = useState(70);
+
+  useEffect(() => {
+    detectLocation();
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopDraggingGuide);
+    window.addEventListener("pointercancel", stopDraggingGuide);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopDraggingGuide);
+      window.removeEventListener("pointercancel", stopDraggingGuide);
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -26,7 +81,108 @@ function App() {
     };
   }, [stream]);
 
+  function detectLocation() {
+    setError("");
+    setLocationStatus("detecting");
+
+    if (!navigator.geolocation) {
+      setLocationStatus("error");
+      setError("Este navegador no permite detectar ubicación.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const userLat = position.coords.latitude;
+        const userLng = position.coords.longitude;
+
+        const nearestScene = findNearestScene(userLat, userLng);
+
+        if (nearestScene) {
+          setCurrentScene(nearestScene);
+          setLocationStatus("detected");
+        } else {
+          setLocationStatus("not-found");
+          setError("No encontramos una postal activa cerca de tu ubicación.");
+        }
+      },
+      (err) => {
+        console.error(err);
+        setLocationStatus("error");
+        setError(
+          "No se pudo detectar la ubicación. Activá el permiso de ubicación."
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  }
+
+  function findNearestScene(userLat, userLng) {
+    let nearest = null;
+    let nearestDistance = Infinity;
+
+    for (const scene of SCENES) {
+      const distance = getDistanceInMeters(
+        userLat,
+        userLng,
+        scene.lat,
+        scene.lng
+      );
+
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = scene;
+      }
+    }
+
+    if (nearest && nearestDistance <= nearest.radiusMeters) {
+      return {
+        ...nearest,
+        distance: Math.round(nearestDistance),
+      };
+    }
+
+    return null;
+  }
+
+  function getDistanceInMeters(lat1, lng1, lat2, lng2) {
+    const earthRadius = 6371000;
+
+    const dLat = toRadians(lat2 - lat1);
+    const dLng = toRadians(lng2 - lng1);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRadians(lat1)) *
+        Math.cos(toRadians(lat2)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return earthRadius * c;
+  }
+
+  function toRadians(value) {
+    return (value * Math.PI) / 180;
+  }
+
+  function useDemoScene() {
+    setCurrentScene(SCENES[0]);
+    setLocationStatus("detected");
+    setError("");
+  }
+
   async function startCamera() {
+    if (!currentScene) {
+      setError("Primero hay que detectar una postal activa cerca.");
+      return;
+    }
+
     setError("");
     setStatus("starting");
 
@@ -56,25 +212,37 @@ function App() {
     }
   }
 
-  function moveGuide(dx, dy) {
-    setGuideX((prev) => clamp(prev + dx, 15, 85));
-    setGuideY((prev) => clamp(prev + dy, 22, 78));
+  function startDraggingGuide(event) {
+    event.preventDefault();
+    draggingGuideRef.current = true;
+    moveGuideToPointer(event);
   }
 
-  function resizeGuide(dw, dh) {
-    setGuideW((prev) => clamp(prev + dw, 20, 60));
-    setGuideH((prev) => clamp(prev + dh, 38, 86));
+  function stopDraggingGuide() {
+    draggingGuideRef.current = false;
   }
 
-  function resetGuide() {
-    setGuideX(50);
-    setGuideY(50);
-    setGuideW(34);
-    setGuideH(70);
+  function handlePointerMove(event) {
+    if (!draggingGuideRef.current) return;
+    moveGuideToPointer(event);
+  }
+
+  function moveGuideToPointer(event) {
+    const cameraBox = cameraBoxRef.current;
+
+    if (!cameraBox) return;
+
+    const rect = cameraBox.getBoundingClientRect();
+
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+
+    setGuideX(clamp(x, 15, 85));
+    setGuideY(clamp(y, 22, 78));
   }
 
   function capturePhoto() {
-    if (isCapturing) return;
+    if (isCapturing || !currentScene) return;
 
     setIsCapturing(true);
 
@@ -112,42 +280,37 @@ function App() {
     canvas.height = height;
 
     try {
+      const scene = currentScene;
       const base = await loadImage(capturedImage);
 
-      // Foto base
       ctx.drawImage(base, 0, 0, width, height);
 
-      // Tono suave
       ctx.fillStyle = "rgba(255, 196, 0, 0.08)";
       ctx.fillRect(0, 0, width, height);
 
-      // Gliptodonte más grande
-      const gliptodonte = await loadImageWithoutLightBackground(
-        "/assets/personajes/gliptodonte.png"
-      );
+      const character = await loadImageWithoutLightBackground(scene.character);
 
       drawPng(
         ctx,
-        gliptodonte,
-        width * 0.01,
-        height * 0.42,
-        width * 0.46,
-        height * 0.42
+        character,
+        width * scene.characterBox.x,
+        height * scene.characterBox.y,
+        width * scene.characterBox.w,
+        height * scene.characterBox.h
       );
 
       drawSoftColorWaves(ctx, width, height);
       drawVignette(ctx, width, height);
       drawPostalFrame(ctx, width, height);
-      drawText(ctx, width, height);
+      drawSceneText(ctx, width, height, scene.postalTitle, scene.postalSubtitle);
 
       const result = canvas.toDataURL("image/png");
+
       setFinalImage(result);
       setStatus("result");
     } catch (err) {
       console.error(err);
-      setError(
-        "No se pudo cargar gliptodonte.png. Revisá que esté en public/assets/personajes/gliptodonte.png"
-      );
+      setError("No se pudo crear la postal. Revisá que existan los PNG.");
       setStatus("camera");
     }
   }
@@ -210,6 +373,7 @@ function App() {
         tempCtx.putImageData(imageData, 0, 0);
 
         const cleanedImg = new Image();
+
         cleanedImg.onload = () => resolve(cleanedImg);
         cleanedImg.onerror = reject;
         cleanedImg.src = tempCanvas.toDataURL("image/png");
@@ -224,11 +388,14 @@ function App() {
 
   function drawPng(ctx, img, x, y, w, h) {
     ctx.save();
+
     ctx.shadowColor = "rgba(0,0,0,0.45)";
     ctx.shadowBlur = 18;
     ctx.shadowOffsetX = 8;
     ctx.shadowOffsetY = 10;
+
     ctx.drawImage(img, x, y, w, h);
+
     ctx.restore();
   }
 
@@ -299,6 +466,7 @@ function App() {
     const border = Math.max(20, width * 0.026);
 
     ctx.save();
+
     ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
     ctx.lineWidth = border;
     ctx.strokeRect(border / 2, border / 2, width - border, height - border);
@@ -306,10 +474,11 @@ function App() {
     ctx.strokeStyle = "rgba(255, 210, 31, 0.85)";
     ctx.lineWidth = 6;
     ctx.strokeRect(border, border, width - border * 2, height - border * 2);
+
     ctx.restore();
   }
 
-  function drawText(ctx, width, height) {
+  function drawSceneText(ctx, width, height, title, subtitle) {
     ctx.save();
 
     ctx.textAlign = "center";
@@ -318,11 +487,11 @@ function App() {
     ctx.shadowBlur = 8;
 
     ctx.font = `bold ${Math.round(width * 0.043)}px Arial, sans-serif`;
-    ctx.fillText("POSTAL VIVA", width / 2, height * 0.88);
+    ctx.fillText(title.toUpperCase(), width / 2, height * 0.88);
 
     ctx.fillStyle = "#FFD21F";
     ctx.font = `bold ${Math.round(width * 0.023)}px Arial, sans-serif`;
-    ctx.fillText("Museo de Ciencias · Megafauna", width / 2, height * 0.925);
+    ctx.fillText(subtitle, width / 2, height * 0.925);
 
     ctx.restore();
   }
@@ -342,6 +511,7 @@ function App() {
     try {
       const response = await fetch(finalImage);
       const blob = await response.blob();
+
       const file = new File([blob], "postal-viva.png", {
         type: "image/png",
       });
@@ -389,101 +559,90 @@ function App() {
               </div>
 
               <h1>Postal Viva</h1>
-              <h2>Elegí tu lugar y sacá tu foto</h2>
 
-              <p>
-                Ubicate en el punto indicado del museo. La app suma personajes,
-                historia y escena a tu postal.
-              </p>
+              {locationStatus === "detecting" && (
+                <>
+                  <h2>Buscando tu lugar…</h2>
+                  <p>Permití la ubicación para cargar la postal correspondiente.</p>
+                </>
+              )}
 
-              <button className="startButton" onClick={startCamera}>
-                <span>📷</span>
-                Activar cámara
-              </button>
+              {locationStatus === "detected" && currentScene && (
+                <>
+                  <h2>{currentScene.name}</h2>
+                  <p>
+                    Postal detectada:{" "}
+                    <strong>{currentScene.postalSubtitle}</strong>
+                  </p>
+
+                  <button className="startButton" onClick={startCamera}>
+                    <span>📷</span>
+                    Activar cámara
+                  </button>
+                </>
+              )}
+
+              {locationStatus === "not-found" && (
+                <>
+                  <h2>Sin postal cercana</h2>
+                  <p>No encontramos una experiencia activa en esta ubicación.</p>
+
+                  <button className="startButton" onClick={detectLocation}>
+                    Reintentar ubicación
+                  </button>
+
+                  <button className="demoButton" onClick={useDemoScene}>
+                    Usar demo Museo de Ciencias
+                  </button>
+                </>
+              )}
+
+              {locationStatus === "error" && (
+                <>
+                  <h2>Ubicación desactivada</h2>
+                  <p>Activá el permiso de ubicación para detectar el museo.</p>
+
+                  <button className="startButton" onClick={detectLocation}>
+                    Reintentar ubicación
+                  </button>
+
+                  <button className="demoButton" onClick={useDemoScene}>
+                    Usar demo Museo de Ciencias
+                  </button>
+                </>
+              )}
 
               {error && <p className="error">{error}</p>}
             </div>
           )}
 
-          {(status === "starting" || status === "camera") && (
-            <div className="cameraBox">
+          {(status === "starting" || status === "camera") && currentScene && (
+            <div className="cameraBox" ref={cameraBoxRef}>
               <video ref={videoRef} autoPlay playsInline muted />
 
               <div className="cameraTopBar">
                 <div>
-                  <span className="placeLabel">Museo de Ciencias</span>
-                  <strong>Postal Megafauna</strong>
+                  <span className="placeLabel">{currentScene.name}</span>
+                  <strong>{currentScene.postalSubtitle}</strong>
                 </div>
               </div>
 
               <div className="overlay">
-                <div className="safePerson" style={safePersonStyle}></div>
+                <div
+                  className="safePerson"
+                  style={safePersonStyle}
+                  onPointerDown={startDraggingGuide}
+                >
+                  <span className="dragHint">Arrastrar</span>
+                </div>
 
                 <div className="leftZone">
-                  <span>Gliptodonte</span>
+                  <span>Personaje</span>
                 </div>
 
                 <div className="instructions">
                   <strong>Ubicá a la persona dentro de la guía</strong>
-                  <span>Podés mover y agrandar el encuadre.</span>
-                </div>
-
-                <div className="guideControls">
-                  <div className="guideControlsTitle">Encuadre</div>
-
-                  <div className="guideRow">
-                    <button
-                      className="guideBtn"
-                      onClick={() => moveGuide(0, -3)}
-                    >
-                      ↑
-                    </button>
-                  </div>
-
-                  <div className="guideRow">
-                    <button
-                      className="guideBtn"
-                      onClick={() => moveGuide(-3, 0)}
-                    >
-                      ←
-                    </button>
-                    <button
-                      className="guideBtn"
-                      onClick={() => moveGuide(3, 0)}
-                    >
-                      →
-                    </button>
-                  </div>
-
-                  <div className="guideRow">
-                    <button
-                      className="guideBtn"
-                      onClick={() => moveGuide(0, 3)}
-                    >
-                      ↓
-                    </button>
-                  </div>
-
-                  <div className="guideRow sizeRow">
-                    <button
-                      className="guideBtn sizeBtn"
-                      onClick={() => resizeGuide(-3, -4)}
-                    >
-                      −
-                    </button>
-                    <button
-                      className="guideBtn sizeBtn"
-                      onClick={() => resizeGuide(3, 4)}
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  <div className="guideRow">
-                    <button className="guideResetBtn" onClick={resetGuide}>
-                      Reset
-                    </button>
-                  </div>
+                  <span>Arrastrá el encuadre con el dedo.</span>
                 </div>
               </div>
 
@@ -501,7 +660,7 @@ function App() {
             <div className="processing">
               <div className="spinner"></div>
               <h2>Creando postal…</h2>
-              <p>Agregando personaje, marco y color.</p>
+              <p>Agregando la escena de este lugar.</p>
             </div>
           )}
 
@@ -514,38 +673,38 @@ function App() {
 
         <div className="panel">
           <div>
-            <p className="tag">MVP básico</p>
+            <p className="tag">Postal automática</p>
 
-            <h2>Postal por lugar</h2>
+            <h2>La app detecta tu lugar</h2>
+
+            {currentScene ? (
+              <div className="detectedCard">
+                <span className="pin yellow"></span>
+
+                <div>
+                  <strong>{currentScene.name}</strong>
+                  <small>{currentScene.postalSubtitle}</small>
+
+                  {currentScene.distance !== undefined && (
+                    <small>Aprox. {currentScene.distance} m de distancia</small>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="detectedCard">
+                <span className="pin blue"></span>
+
+                <div>
+                  <strong>Detectando ubicación</strong>
+                  <small>No se muestran lugares manuales.</small>
+                </div>
+              </div>
+            )}
 
             <p>
-              Ahora el gliptodonte es más grande y el encuadre se puede mover y
-              cambiar de tamaño.
+              La postal se define por ubicación. Más adelante cargamos las
+              coordenadas reales de cada museo o punto fotográfico.
             </p>
-
-            <div className="placeCard active">
-              <span className="pin yellow"></span>
-              <div>
-                <strong>Museo de Ciencias</strong>
-                <small>Megafauna · Gliptodonte</small>
-              </div>
-            </div>
-
-            <div className="placeCard">
-              <span className="pin blue"></span>
-              <div>
-                <strong>Museo Emiliozzi</strong>
-                <small>Hermanos Emiliozzi</small>
-              </div>
-            </div>
-
-            <div className="placeCard">
-              <span className="pin green"></span>
-              <div>
-                <strong>Otro espacio</strong>
-                <small>Postal a definir</small>
-              </div>
-            </div>
           </div>
 
           <div className="actions">

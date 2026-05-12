@@ -10,6 +10,7 @@ function App() {
   const [status, setStatus] = useState("idle");
   const [finalImage, setFinalImage] = useState(null);
   const [error, setError] = useState("");
+  const [isCapturing, setIsCapturing] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -50,27 +51,35 @@ function App() {
   }
 
   function capturePhoto() {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
+    if (isCapturing) return;
 
-    if (!video || !canvas) return;
-
-    const width = video.videoWidth || 1280;
-    const height = video.videoHeight || 720;
-
-    canvas.width = width;
-    canvas.height = height;
-
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, width, height);
-
-    const capturedImage = canvas.toDataURL("image/jpeg", 0.92);
-
-    setStatus("processing");
+    setIsCapturing(true);
 
     setTimeout(() => {
-      createPostal(capturedImage, width, height);
-    }, 500);
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+
+      if (!video || !canvas) return;
+
+      const width = video.videoWidth || 1280;
+      const height = video.videoHeight || 720;
+
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext("2d");
+
+      ctx.drawImage(video, 0, 0, width, height);
+
+      const capturedImage = canvas.toDataURL("image/jpeg", 0.92);
+
+      setStatus("processing");
+      setIsCapturing(false);
+
+      setTimeout(() => {
+        createPostal(capturedImage, width, height);
+      }, 500);
+    }, 220);
   }
 
   async function createPostal(capturedImage, width, height) {
@@ -86,11 +95,11 @@ function App() {
       // Foto original
       ctx.drawImage(base, 0, 0, width, height);
 
-      // Tono general
-      ctx.fillStyle = "rgba(70, 43, 18, 0.18)";
+      // Tono cálido suave
+      ctx.fillStyle = "rgba(255, 196, 0, 0.08)";
       ctx.fillRect(0, 0, width, height);
 
-      // Cargar gliptodonte removiendo fondo blanco/claro
+      // Gliptodonte sin fondo claro
       const gliptodonte = await loadImageWithoutLightBackground(
         "/assets/personajes/gliptodonte.png"
       );
@@ -104,11 +113,13 @@ function App() {
         height * 0.30
       );
 
+      drawSoftColorWaves(ctx, width, height);
       drawVignette(ctx, width, height);
       drawPostalFrame(ctx, width, height);
       drawText(ctx, width, height);
 
       const result = canvas.toDataURL("image/png");
+
       setFinalImage(result);
       setStatus("result");
     } catch (err) {
@@ -166,7 +177,7 @@ function App() {
 
           const isVeryLight = r > 210 && g > 210 && b > 210;
           const colorDifference = Math.max(r, g, b) - Math.min(r, g, b);
-          const isNeutralLight = isVeryLight && colorDifference < 25;
+          const isNeutralLight = isVeryLight && colorDifference < 35;
 
           if (isNeutralLight) {
             data[i + 3] = 0;
@@ -182,7 +193,9 @@ function App() {
         cleanedImg.src = tempCanvas.toDataURL("image/png");
       };
 
-      img.onerror = () => reject(new Error("No se pudo cargar la imagen: " + src));
+      img.onerror = () =>
+        reject(new Error("No se pudo cargar la imagen: " + src));
+
       img.src = src;
     });
   }
@@ -200,6 +213,53 @@ function App() {
     ctx.restore();
   }
 
+  function drawSoftColorWaves(ctx, width, height) {
+    ctx.save();
+
+    ctx.globalAlpha = 0.18;
+
+    ctx.fillStyle = "#FFD21F";
+    ctx.beginPath();
+    ctx.ellipse(
+      width * 0.18,
+      height * 0.92,
+      width * 0.35,
+      height * 0.18,
+      -0.2,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.fillStyle = "#27A844";
+    ctx.beginPath();
+    ctx.ellipse(
+      width * 0.85,
+      height * 0.86,
+      width * 0.34,
+      height * 0.18,
+      0.2,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.fillStyle = "#129BE3";
+    ctx.beginPath();
+    ctx.ellipse(
+      width * 0.55,
+      height * 0.95,
+      width * 0.42,
+      height * 0.15,
+      0.05,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.restore();
+  }
+
   function drawVignette(ctx, width, height) {
     const gradient = ctx.createRadialGradient(
       width / 2,
@@ -211,23 +271,23 @@ function App() {
     );
 
     gradient.addColorStop(0, "rgba(0,0,0,0)");
-    gradient.addColorStop(1, "rgba(0,0,0,0.48)");
+    gradient.addColorStop(1, "rgba(0,0,0,0.34)");
 
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
   }
 
   function drawPostalFrame(ctx, width, height) {
-    const border = Math.max(24, width * 0.035);
+    const border = Math.max(20, width * 0.026);
 
     ctx.save();
 
-    ctx.strokeStyle = "rgba(255, 248, 230, 0.95)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
     ctx.lineWidth = border;
     ctx.strokeRect(border / 2, border / 2, width - border, height - border);
 
-    ctx.strokeStyle = "rgba(65, 39, 20, 0.70)";
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(255, 210, 31, 0.85)";
+    ctx.lineWidth = 6;
     ctx.strokeRect(border, border, width - border * 2, height - border * 2);
 
     ctx.restore();
@@ -237,15 +297,16 @@ function App() {
     ctx.save();
 
     ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(255, 248, 230, 0.98)";
+    ctx.fillStyle = "#ffffff";
     ctx.shadowColor = "rgba(0,0,0,0.65)";
     ctx.shadowBlur = 8;
 
-    ctx.font = `bold ${Math.round(width * 0.045)}px Georgia, serif`;
+    ctx.font = `bold ${Math.round(width * 0.043)}px Arial, sans-serif`;
     ctx.fillText("POSTAL VIVA", width / 2, height * 0.88);
 
-    ctx.font = `${Math.round(width * 0.022)}px Arial, sans-serif`;
-    ctx.fillText("Una foto que no existía", width / 2, height * 0.925);
+    ctx.fillStyle = "#FFD21F";
+    ctx.font = `bold ${Math.round(width * 0.023)}px Arial, sans-serif`;
+    ctx.fillText("Museo de Ciencias · Megafauna", width / 2, height * 0.925);
 
     ctx.restore();
   }
@@ -296,17 +357,26 @@ function App() {
         <div className="preview">
           {status === "idle" && (
             <div className="intro">
-              <div className="icon">🖼️</div>
+              <div className="brandIcons">
+                <span className="iconGhost"></span>
+                <span className="iconRoad"></span>
+                <span className="iconCrown"></span>
+                <span className="iconTree"></span>
+                <span className="iconDotBig"></span>
+              </div>
 
               <h1>Postal Viva</h1>
 
+              <h2>Elegí tu lugar y sacá tu foto</h2>
+
               <p>
-                Activá la cámara, ubicá a la persona dentro de la guía y generá
-                una postal intervenida.
+                Ubicate en el punto indicado del museo. La app suma personajes,
+                historia y escena a tu postal.
               </p>
 
-              <button className="primary" onClick={startCamera}>
-                📷 Activar cámara
+              <button className="startButton" onClick={startCamera}>
+                <span>📷</span>
+                Activar cámara
               </button>
 
               {error && <p className="error">{error}</p>}
@@ -317,17 +387,33 @@ function App() {
             <div className="cameraBox">
               <video ref={videoRef} autoPlay playsInline muted />
 
+              <div className="cameraTopBar">
+                <div>
+                  <span className="placeLabel">Museo de Ciencias</span>
+                  <strong>Postal Megafauna</strong>
+                </div>
+              </div>
+
               <div className="overlay">
                 <div className="safePerson"></div>
 
-                <div className="leftZone">Gliptodonte</div>
-                <div className="rightZone">Fondo</div>
+                <div className="leftZone">
+                  <span>Gliptodonte</span>
+                </div>
 
                 <div className="instructions">
-                  <strong>Ubicá a la persona dentro de la silueta</strong>
-                  <span>El gliptodonte aparecerá a la izquierda.</span>
+                  <strong>Ubicá a la persona dentro de la guía</strong>
+                  <span>El personaje aparecerá en el lateral.</span>
                 </div>
               </div>
+
+              <button
+                className={`captureButton ${isCapturing ? "capturing" : ""}`}
+                onClick={capturePhoto}
+                aria-label="Sacar foto"
+              >
+                <span></span>
+              </button>
             </div>
           )}
 
@@ -335,7 +421,7 @@ function App() {
             <div className="processing">
               <div className="spinner"></div>
               <h2>Creando postal…</h2>
-              <p>Agregando gliptodonte, marco y color.</p>
+              <p>Agregando personaje, marco y color.</p>
             </div>
           )}
 
@@ -350,50 +436,51 @@ function App() {
           <div>
             <p className="tag">MVP básico</p>
 
-            <h2>Foto guiada + gliptodonte PNG</h2>
+            <h2>Postal por lugar</h2>
 
             <p>
-              Esta versión intenta borrar automáticamente el fondo blanco/claro
-              del archivo <strong>gliptodonte.png</strong>.
+              Ahora trabajamos con estética colorida y botón de cámara flotante.
+              En el próximo paso agregamos selección automática por ubicación.
             </p>
 
-            <div className="steps">
+            <div className="placeCard active">
+              <span className="pin yellow"></span>
               <div>
-                <strong>1. Cámara</strong>
-                <span>La persona se ubica en el centro.</span>
+                <strong>Museo de Ciencias</strong>
+                <small>Megafauna · Gliptodonte</small>
               </div>
+            </div>
 
+            <div className="placeCard">
+              <span className="pin blue"></span>
               <div>
-                <strong>2. PNG</strong>
-                <span>El gliptodonte aparece en la zona izquierda.</span>
+                <strong>Museo Emiliozzi</strong>
+                <small>Hermanos Emiliozzi</small>
               </div>
+            </div>
 
+            <div className="placeCard">
+              <span className="pin green"></span>
               <div>
-                <strong>3. Postal</strong>
-                <span>Se genera una imagen descargable.</span>
+                <strong>Otro espacio</strong>
+                <small>Postal a definir</small>
               </div>
             </div>
           </div>
 
           <div className="actions">
-            {status === "camera" && (
-              <button className="primary full" onClick={capturePhoto}>
-                📷 Sacar foto
-              </button>
-            )}
-
             {status === "result" && (
               <>
                 <button className="primary full" onClick={downloadPostal}>
-                  ⬇️ Descargar postal
+                  Descargar postal
                 </button>
 
                 <button className="secondary full" onClick={sharePostal}>
-                  📤 Compartir
+                  Compartir
                 </button>
 
                 <button className="secondary full" onClick={reset}>
-                  🔄 Tomar otra foto
+                  Tomar otra foto
                 </button>
               </>
             )}

@@ -6,7 +6,7 @@ const OUTPUT_WIDTH = 1280;
 const OUTPUT_HEIGHT = 1600;
 
 const SPACES = {
-  "ciencias": {
+  ciencias: {
     id: "ciencias",
     name: "Museo de las Ciencias",
     postalTitle: "Yo visité el Museo de las Ciencias",
@@ -20,17 +20,17 @@ const SPACES = {
     postalTitle: "Yo visité el Museo Dámaso Arce",
     postalSubtitle: "Arte · Historia · Cultura",
     frame: "/assets/marcos/damaso-arce-photocall.png",
-    instruction: "Ubicate entre Belgrano y el pintor.",
+    instruction: "Ubicate entre los personajes del marco.",
   },
   "centro-cultural": {
     id: "centro-cultural",
     name: "Centro Cultural",
     postalTitle: "Yo visité el Centro Cultural",
-    postalSubtitle: "Arte · Comunidad · Encuentro",
+    postalSubtitle: "Arte · Música · Comunidad",
     frame: "/assets/marcos/centro-cultural-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
   },
-  "emiliozzi": {
+  emiliozzi: {
     id: "emiliozzi",
     name: "Museo Hermanos Emiliozzi",
     postalTitle: "Yo visité el Museo Hermanos Emiliozzi",
@@ -42,7 +42,7 @@ const SPACES = {
     id: "loma-negra",
     name: "Museo de Loma Negra",
     postalTitle: "Yo visité el Museo de Loma Negra",
-    postalSubtitle: "Industria · Identidad · Comunidad",
+    postalSubtitle: "Industria · Inmigración · Comunidad",
     frame: "/assets/marcos/loma-negra-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
   },
@@ -101,22 +101,22 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (
+      (status === "camera" || status === "starting") &&
+      videoRef.current &&
+      stream
+    ) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [status, stream]);
+
+  useEffect(() => {
     return () => {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
       }
     };
   }, [stream]);
-useEffect(() => {
-  if (
-    (status === "camera" || status === "starting") &&
-    videoRef.current &&
-    stream
-  ) {
-    videoRef.current.srcObject = stream;
-  }
-}, [status, stream]);
-
 
   function loadSpaceFromUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -124,6 +124,7 @@ useEffect(() => {
 
     if (spaceId && SPACES[spaceId]) {
       setCurrentSpace(SPACES[spaceId]);
+      setError("");
       return;
     }
 
@@ -143,6 +144,17 @@ useEffect(() => {
     setError("");
   }
 
+  function clearSpace() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("space");
+    window.history.replaceState({}, "", url.toString());
+
+    setCurrentSpace(null);
+    setFinalImage(null);
+    setStatus("idle");
+    setError("");
+  }
+
   async function startCamera() {
     if (!currentSpace) {
       setError("Primero seleccioná un espacio o escaneá el QR del lugar.");
@@ -153,22 +165,28 @@ useEffect(() => {
     setStatus("starting");
 
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
+      let mediaStream = stream;
 
-      setStream(mediaStream);
+      if (!mediaStream) {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
+        setStream(mediaStream);
       }
 
       setStatus("camera");
+
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+      }, 50);
     } catch (err) {
       console.error(err);
       setError(
@@ -176,6 +194,15 @@ useEffect(() => {
       );
       setStatus("idle");
     }
+  }
+
+  function stopCamera() {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      setStream(null);
+    }
+
+    setStatus("idle");
   }
 
   function selectPeople(amount) {
@@ -266,12 +293,18 @@ useEffect(() => {
     if (isCapturing || !currentSpace) return;
 
     setIsCapturing(true);
+    setError("");
 
     setTimeout(() => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
 
-      if (!video || !canvas) return;
+      if (!video || !canvas) {
+        setIsCapturing(false);
+        setError("No se pudo capturar la cámara.");
+        setStatus("idle");
+        return;
+      }
 
       const sourceWidth = video.videoWidth || 1280;
       const sourceHeight = video.videoHeight || 720;
@@ -295,32 +328,52 @@ useEffect(() => {
 
   async function createPostal(capturedImage) {
     const canvas = canvasRef.current;
+
+    if (!canvas) {
+      setError("No se pudo acceder al canvas.");
+      setStatus("idle");
+      return;
+    }
+
     const ctx = canvas.getContext("2d");
 
     canvas.width = OUTPUT_WIDTH;
     canvas.height = OUTPUT_HEIGHT;
 
     try {
+      if (!currentSpace) {
+        throw new Error("No hay espacio seleccionado.");
+      }
+
       const photo = await loadImage(capturedImage);
       const frame = await loadImage(currentSpace.frame);
 
+      ctx.clearRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+
       drawPhotoInsideCenter(ctx, photo, OUTPUT_WIDTH, OUTPUT_HEIGHT);
       drawCenterLightWash(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+
       ctx.drawImage(frame, 0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+
       drawSoftVignette(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
       const result = canvas.toDataURL("image/png");
+
       setFinalImage(result);
+      setError("");
       setStatus("result");
     } catch (err) {
-  console.error(err);
-  setError(
-    `No se pudo crear la postal. Falta o falla este marco: ${currentSpace.frame}`
-  );
+      console.error(err);
 
-  // Volvemos al inicio para evitar cámara negra.
-  setStatus("idle");
-}
+      setError(
+        `No se pudo crear la postal. Falta o falla este marco: ${
+          currentSpace?.frame || "sin marco"
+        }`
+      );
+
+      setFinalImage(null);
+      setStatus("idle");
+    }
   }
 
   function drawPhotoInsideCenter(ctx, img, width, height) {
@@ -453,7 +506,18 @@ useEffect(() => {
   function reset() {
     setFinalImage(null);
     setError("");
-    setStatus(stream ? "camera" : "idle");
+
+    if (stream) {
+      setStatus("camera");
+
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 50);
+    } else {
+      setStatus("idle");
+    }
   }
 
   const activeGuides = guides.slice(0, peopleCount);
@@ -529,15 +593,7 @@ useEffect(() => {
                     Activar cámara
                   </button>
 
-                  <button
-                    className="demoButton"
-                    onClick={() => {
-                      const url = new URL(window.location.href);
-                      url.searchParams.delete("space");
-                      window.history.replaceState({}, "", url.toString());
-                      setCurrentSpace(null);
-                    }}
-                  >
+                  <button className="demoButton" onClick={clearSpace}>
                     Cambiar espacio
                   </button>
                 </>
@@ -592,6 +648,10 @@ useEffect(() => {
               >
                 <span></span>
               </button>
+
+              <button className="closeCameraButton" onClick={stopCamera}>
+                Salir
+              </button>
             </div>
           )}
 
@@ -615,9 +675,7 @@ useEffect(() => {
             <p className="tag">Postal temática</p>
 
             <h2>
-              {currentSpace
-                ? currentSpace.name
-                : "Experiencias disponibles"}
+              {currentSpace ? currentSpace.name : "Experiencias disponibles"}
             </h2>
 
             {currentSpace ? (
@@ -658,6 +716,10 @@ useEffect(() => {
 
                 <button className="secondary full" onClick={reset}>
                   Tomar otra foto
+                </button>
+
+                <button className="secondary full" onClick={clearSpace}>
+                  Cambiar espacio
                 </button>
               </>
             )}

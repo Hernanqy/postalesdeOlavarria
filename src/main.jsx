@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-
 import "./styles.css";
 
 const OUTPUT_WIDTH = 1280;
@@ -96,7 +95,44 @@ function App() {
   }, [stream]);
 
   function initializeSegmenter() {
-    const segmenter = new SelfieSegmentation({
+    if (window.SelfieSegmentation) {
+      createSegmenterFromWindow();
+      return;
+    }
+
+    const existingScript = document.querySelector(
+      'script[data-mediapipe="selfie-segmentation"]'
+    );
+
+    if (existingScript) {
+      existingScript.addEventListener("load", createSegmenterFromWindow);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src =
+      "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js";
+    script.async = true;
+    script.dataset.mediapipe = "selfie-segmentation";
+
+    script.onload = () => {
+      createSegmenterFromWindow();
+    };
+
+    script.onerror = () => {
+      setError("No se pudo cargar el recorte automático.");
+    };
+
+    document.body.appendChild(script);
+  }
+
+  function createSegmenterFromWindow() {
+    if (!window.SelfieSegmentation) {
+      setError("El recorte automático no está disponible en este navegador.");
+      return;
+    }
+
+    const segmenter = new window.SelfieSegmentation({
       locateFile: (file) =>
         `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
     });
@@ -301,6 +337,7 @@ function App() {
 
   function moveGuideToPointer(event, guideId) {
     const cameraBox = cameraBoxRef.current;
+
     if (!cameraBox) return;
 
     const rect = cameraBox.getBoundingClientRect();
@@ -899,7 +936,7 @@ function App() {
           <div>
             <p className="tag">Postal automática</p>
 
-            <h2>Recorte automático</h2>
+            <h2>Recorte automático V22</h2>
 
             {currentScene ? (
               <div className="detectedCard">
@@ -947,7 +984,7 @@ function App() {
 
             {status !== "idle" && status !== "result" && (
               <button className="secondary full" onClick={reset}>
-                Reiniciar_
+                Reiniciar
               </button>
             )}
           </div>

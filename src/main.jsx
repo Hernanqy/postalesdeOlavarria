@@ -15,7 +15,7 @@ const SCENES = [
     lng: -60.3225,
     radiusMeters: 400,
     theme: "megafauna",
-    background: "/assets/fondos/megafauna-fondo.jpg",
+    mainObject: "/assets/personajes/gliptodonte.png",
   },
   {
     id: "museo-emiliozzi",
@@ -26,7 +26,7 @@ const SCENES = [
     lng: -60.3215,
     radiusMeters: 400,
     theme: "emiliozzi",
-    background: "/assets/fondos/emiliozzi-fondo.jpg",
+    mainObject: "/assets/personajes/gliptodonte.png",
   },
 ];
 
@@ -35,7 +35,6 @@ function App() {
   const canvasRef = useRef(null);
   const cameraBoxRef = useRef(null);
   const draggingGuideRef = useRef(null);
-  const segmenterRef = useRef(null);
 
   const [stream, setStream] = useState(null);
   const [status, setStatus] = useState("idle");
@@ -52,18 +51,18 @@ function App() {
     {
       id: "person-1",
       label: "Persona 1",
-      x: 62,
-      y: 54,
+      x: 50,
+      y: 52,
       w: 34,
-      h: 74,
+      h: 72,
     },
     {
       id: "person-2",
       label: "Persona 2",
-      x: 72,
-      y: 54,
+      x: 70,
+      y: 52,
       w: 30,
-      h: 70,
+      h: 68,
     },
   ]);
 
@@ -71,7 +70,6 @@ function App() {
 
   useEffect(() => {
     detectLocation();
-    initializeSegmenter();
   }, []);
 
   useEffect(() => {
@@ -93,56 +91,6 @@ function App() {
       }
     };
   }, [stream]);
-
-  function initializeSegmenter() {
-    if (window.SelfieSegmentation) {
-      createSegmenterFromWindow();
-      return;
-    }
-
-    const existingScript = document.querySelector(
-      'script[data-mediapipe="selfie-segmentation"]'
-    );
-
-    if (existingScript) {
-      existingScript.addEventListener("load", createSegmenterFromWindow);
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src =
-      "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js";
-    script.async = true;
-    script.dataset.mediapipe = "selfie-segmentation";
-
-    script.onload = () => {
-      createSegmenterFromWindow();
-    };
-
-    script.onerror = () => {
-      setError("No se pudo cargar el recorte automático.");
-    };
-
-    document.body.appendChild(script);
-  }
-
-  function createSegmenterFromWindow() {
-    if (!window.SelfieSegmentation) {
-      setError("El recorte automático no está disponible en este navegador.");
-      return;
-    }
-
-    const segmenter = new window.SelfieSegmentation({
-      locateFile: (file) =>
-        `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
-    });
-
-    segmenter.setOptions({
-      modelSelection: 1,
-    });
-
-    segmenterRef.current = segmenter;
-  }
 
   function detectLocation() {
     setError("");
@@ -282,18 +230,18 @@ function App() {
         {
           id: "person-1",
           label: "Persona 1",
-          x: 62,
-          y: 54,
+          x: 50,
+          y: 52,
           w: 34,
-          h: 74,
+          h: 72,
         },
         {
           id: "person-2",
           label: "Persona 2",
-          x: 72,
-          y: 54,
+          x: 70,
+          y: 52,
           w: 30,
-          h: 70,
+          h: 68,
         },
       ]);
     }
@@ -303,18 +251,18 @@ function App() {
         {
           id: "person-1",
           label: "Persona 1",
-          x: 46,
-          y: 54,
+          x: 38,
+          y: 52,
           w: 30,
-          h: 70,
+          h: 68,
         },
         {
           id: "person-2",
           label: "Persona 2",
-          x: 72,
-          y: 54,
+          x: 64,
+          y: 52,
           w: 30,
-          h: 70,
+          h: 68,
         },
       ]);
     }
@@ -384,12 +332,12 @@ function App() {
       setIsCapturing(false);
 
       setTimeout(() => {
-        createPostal(capturedImage, sourceWidth, sourceHeight);
+        createPostal(capturedImage);
       }, 250);
     }, 160);
   }
 
-  async function createPostal(capturedImage, sourceWidth, sourceHeight) {
+  async function createPostal(capturedImage) {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
@@ -398,29 +346,21 @@ function App() {
 
     try {
       const scene = currentScene;
+      const base = await loadImage(capturedImage);
 
-      await drawThemeBackground(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, scene);
+      drawWhiteStudioBase(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+      drawPhotoCover(ctx, base, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+      drawCleanFloor(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
-      drawGroundShadows(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+      const layout = calculateObjectLayout(OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
-      const cutoutCanvas = await segmentPeopleFromImage(
-        capturedImage,
-        sourceWidth,
-        sourceHeight
-      );
+      if (scene.theme === "emiliozzi") {
+        await drawEmiliozziObjects(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, layout);
+      } else {
+        await drawMegafaunaObjects(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, layout);
+      }
 
-      drawSelectedPeopleCutouts(
-        ctx,
-        cutoutCanvas,
-        sourceWidth,
-        sourceHeight,
-        OUTPUT_WIDTH,
-        OUTPUT_HEIGHT,
-        scene.theme
-      );
-
-      drawAtmosphereOverlay(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, scene.theme);
-      drawVignette(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+      drawAtmosphere(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, scene.theme);
       drawPostalFrame(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
       drawSceneText(
         ctx,
@@ -440,334 +380,367 @@ function App() {
     }
   }
 
-  async function segmentPeopleFromImage(imageSrc, sourceWidth, sourceHeight) {
-    if (!segmenterRef.current) {
-      throw new Error("La segmentación todavía no está lista.");
-    }
+  function drawWhiteStudioBase(ctx, width, height) {
+    const bg = ctx.createLinearGradient(0, 0, 0, height);
+    bg.addColorStop(0, "#ffffff");
+    bg.addColorStop(0.58, "#ffffff");
+    bg.addColorStop(0.59, "#f1eee8");
+    bg.addColorStop(1, "#ded7cc");
 
-    const sourceImage = await loadImage(imageSrc);
-    const segmenter = segmenterRef.current;
-
-    return new Promise((resolve, reject) => {
-      const cutoutCanvas = document.createElement("canvas");
-      const cutoutCtx = cutoutCanvas.getContext("2d");
-
-      cutoutCanvas.width = sourceWidth;
-      cutoutCanvas.height = sourceHeight;
-
-      segmenter.onResults((results) => {
-        try {
-          cutoutCtx.clearRect(0, 0, sourceWidth, sourceHeight);
-
-          const rawMaskCanvas = document.createElement("canvas");
-          const rawMaskCtx = rawMaskCanvas.getContext("2d");
-
-          rawMaskCanvas.width = sourceWidth;
-          rawMaskCanvas.height = sourceHeight;
-
-          rawMaskCtx.drawImage(
-            results.segmentationMask,
-            0,
-            0,
-            sourceWidth,
-            sourceHeight
-          );
-
-          const maskData = rawMaskCtx.getImageData(
-            0,
-            0,
-            sourceWidth,
-            sourceHeight
-          );
-
-          const data = maskData.data;
-
-          for (let i = 0; i < data.length; i += 4) {
-            const value = data[i];
-
-            let alpha = 0;
-
-            if (value > 70) {
-              alpha = Math.min(255, Math.max(0, (value - 70) * 1.7));
-            }
-
-            data[i] = 255;
-            data[i + 1] = 255;
-            data[i + 2] = 255;
-            data[i + 3] = alpha;
-          }
-
-          rawMaskCtx.putImageData(maskData, 0, 0);
-
-          const softMaskCanvas = document.createElement("canvas");
-          const softMaskCtx = softMaskCanvas.getContext("2d");
-
-          softMaskCanvas.width = sourceWidth;
-          softMaskCanvas.height = sourceHeight;
-
-          softMaskCtx.filter = "blur(5px)";
-          softMaskCtx.drawImage(
-            rawMaskCanvas,
-            0,
-            0,
-            sourceWidth,
-            sourceHeight
-          );
-          softMaskCtx.filter = "none";
-
-          cutoutCtx.drawImage(results.image, 0, 0, sourceWidth, sourceHeight);
-          cutoutCtx.globalCompositeOperation = "destination-in";
-          cutoutCtx.drawImage(
-            softMaskCanvas,
-            0,
-            0,
-            sourceWidth,
-            sourceHeight
-          );
-          cutoutCtx.globalCompositeOperation = "source-over";
-
-          resolve(cutoutCanvas);
-        } catch (error) {
-          reject(error);
-        }
-      });
-
-      segmenter.send({ image: sourceImage }).catch(reject);
-    });
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, width, height);
   }
 
-  async function drawThemeBackground(ctx, width, height, scene) {
-    try {
-      const background = await loadImage(scene.background);
-      drawCoverImage(ctx, background, width, height);
-    } catch (err) {
-      console.error("No se pudo cargar el fondo:", err);
-
-      if (scene.theme === "emiliozzi") {
-        drawFallbackEmiliozziBackground(ctx, width, height);
-        return;
-      }
-
-      drawFallbackMegafaunaBackground(ctx, width, height);
-    }
-  }
-
-  function drawSelectedPeopleCutouts(
-    ctx,
-    cutoutCanvas,
-    sourceWidth,
-    sourceHeight,
-    outputWidth,
-    outputHeight,
-    theme
-  ) {
-    const activeGuides = guides.slice(0, peopleCount);
-
-    activeGuides.forEach((guide, index) => {
-      const sourceRect = guideToSourceRect(guide, sourceWidth, sourceHeight);
-      const outputRect = guideToOutputRect(
-        guide,
-        outputWidth,
-        outputHeight,
-        index
-      );
-
-      const personLayer = createSoftPersonLayer(cutoutCanvas, sourceRect, theme);
-
-      drawPersonShadow(ctx, outputRect);
-
-      ctx.save();
-      ctx.filter = "saturate(0.97) contrast(1.02) brightness(0.98)";
-      ctx.drawImage(
-        personLayer,
-        outputRect.x,
-        outputRect.y,
-        outputRect.w,
-        outputRect.h
-      );
-      ctx.restore();
-    });
-  }
-
-  function createSoftPersonLayer(cutoutCanvas, sourceRect, theme) {
-    const layer = document.createElement("canvas");
-    const layerCtx = layer.getContext("2d");
-
-    layer.width = Math.max(1, Math.round(sourceRect.w));
-    layer.height = Math.max(1, Math.round(sourceRect.h));
-
-    layerCtx.clearRect(0, 0, layer.width, layer.height);
-
-    layerCtx.filter = "blur(0.8px)";
-    layerCtx.drawImage(
-      cutoutCanvas,
-      sourceRect.x,
-      sourceRect.y,
-      sourceRect.w,
-      sourceRect.h,
-      0,
-      0,
-      layer.width,
-      layer.height
-    );
-    layerCtx.filter = "none";
-
-    layerCtx.globalCompositeOperation = "source-atop";
-    layerCtx.fillStyle =
-      theme === "emiliozzi"
-        ? "rgba(120, 95, 70, 0.08)"
-        : "rgba(214, 176, 88, 0.10)";
-    layerCtx.fillRect(0, 0, layer.width, layer.height);
-
-    layerCtx.globalCompositeOperation = "source-over";
-
-    return layer;
-  }
-
-  function guideToSourceRect(guide, sourceWidth, sourceHeight) {
-    const padding = 1.18;
-
-    const w = sourceWidth * (guide.w / 100) * padding;
-    const h = sourceHeight * (guide.h / 100) * padding;
-
-    const centerX = sourceWidth * (guide.x / 100);
-    const centerY = sourceHeight * (guide.y / 100);
-
-    return {
-      x: clamp(centerX - w / 2, 0, sourceWidth - w),
-      y: clamp(centerY - h / 2, 0, sourceHeight - h),
-      w: clamp(w, 10, sourceWidth),
-      h: clamp(h, 10, sourceHeight),
-    };
-  }
-
-  function guideToOutputRect(guide, outputWidth, outputHeight, index = 0) {
-    const scale = peopleCount === 1 ? 0.68 : 0.58;
-
-    const h = outputHeight * scale;
-    const w = h * 0.42;
-
-    const x = outputWidth * (guide.x / 100) - w / 2;
-    const y = outputHeight * 0.23;
-
-    return {
-      x,
-      y,
-      w,
-      h,
-    };
-  }
-
-  function drawGroundShadows(ctx, width, height) {
-    const activeGuides = guides.slice(0, peopleCount);
-
+  function drawPhotoCover(ctx, img, width, height) {
     ctx.save();
 
-    activeGuides.forEach((guide) => {
-      const x = width * (guide.x / 100);
-      const y = height * 0.82;
+    drawCoverImage(ctx, img, width, height);
 
-      const gradient = ctx.createRadialGradient(
-        x,
-        y,
-        width * 0.02,
-        x,
-        y,
-        width * 0.14
-      );
-
-      gradient.addColorStop(0, "rgba(0,0,0,0.16)");
-      gradient.addColorStop(1, "rgba(0,0,0,0)");
-
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, width, height);
-    });
+    // Suaviza la foto para que funcione como postal sobre fondo blanco.
+    ctx.fillStyle = "rgba(255,255,255,0.10)";
+    ctx.fillRect(0, 0, width, height);
 
     ctx.restore();
   }
 
-  function drawPersonShadow(ctx, outputRect) {
+  function drawCleanFloor(ctx, width, height) {
     ctx.save();
 
-    const shadowX = outputRect.x + outputRect.w * 0.5;
-    const shadowY = outputRect.y + outputRect.h * 0.96;
-    const shadowW = outputRect.w * 0.72;
-    const shadowH = outputRect.h * 0.08;
+    const floorY = height * 0.68;
+
+    const floor = ctx.createLinearGradient(0, floorY, 0, height);
+    floor.addColorStop(0, "rgba(255,255,255,0.05)");
+    floor.addColorStop(1, "rgba(210,204,194,0.28)");
+
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, floorY, width, height - floorY);
+
+    ctx.strokeStyle = "rgba(80,70,60,0.16)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, floorY);
+    ctx.lineTo(width, floorY);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function calculateObjectLayout(width, height) {
+    const activeGuides = guides.slice(0, peopleCount);
+
+    const occupied = activeGuides.map((guide) => {
+      const left = width * ((guide.x - guide.w / 2) / 100);
+      const right = width * ((guide.x + guide.w / 2) / 100);
+
+      return {
+        left,
+        right,
+        center: width * (guide.x / 100),
+      };
+    });
+
+    const minLeft = Math.min(...occupied.map((item) => item.left));
+    const maxRight = Math.max(...occupied.map((item) => item.right));
+    const center = (minLeft + maxRight) / 2;
+
+    const leftSpace = minLeft;
+    const rightSpace = width - maxRight;
+
+    const mainSide = leftSpace > rightSpace ? "left" : "right";
+
+    const mainObject = {
+      side: mainSide,
+      x: mainSide === "left" ? width * 0.04 : width * 0.66,
+      y: height * 0.47,
+      w: width * 0.30,
+      h: height * 0.32,
+    };
+
+    const secondaryObject = {
+      side: mainSide === "left" ? "right" : "left",
+      x: mainSide === "left" ? width * 0.72 : width * 0.08,
+      y: height * 0.18,
+      w: width * 0.18,
+      h: height * 0.24,
+    };
+
+    const foregroundObject = {
+      x: center < width / 2 ? width * 0.70 : width * 0.08,
+      y: height * 0.76,
+      w: width * 0.24,
+      h: height * 0.16,
+    };
+
+    return {
+      activeGuides,
+      mainObject,
+      secondaryObject,
+      foregroundObject,
+      occupied,
+    };
+  }
+
+  async function drawMegafaunaObjects(ctx, width, height, layout) {
+    ctx.save();
+
+    // Objeto principal: gliptodonte, si existe PNG.
+    try {
+      const gliptodonte = await loadImageWithoutLightBackground(
+        "/assets/personajes/gliptodonte.png"
+      );
+
+      drawObjectShadow(ctx, layout.mainObject);
+      ctx.drawImage(
+        gliptodonte,
+        layout.mainObject.x,
+        layout.mainObject.y,
+        layout.mainObject.w,
+        layout.mainObject.h
+      );
+    } catch (err) {
+      drawFallbackGliptodonte(ctx, layout.mainObject);
+    }
+
+    // Objeto secundario: sol / ave / señal gráfica.
+    drawSunBadge(ctx, layout.secondaryObject);
+
+    // Objeto frontal: huesos / fósil en piso.
+    drawFossilForeground(ctx, layout.foregroundObject);
+
+    ctx.restore();
+  }
+
+  async function drawEmiliozziObjects(ctx, width, height, layout) {
+    ctx.save();
+
+    drawVintageCar(ctx, layout.mainObject);
+    drawToolSign(ctx, layout.secondaryObject);
+    drawToolsForeground(ctx, layout.foregroundObject);
+
+    ctx.restore();
+  }
+
+  function drawObjectShadow(ctx, rect) {
+    ctx.save();
+
+    const shadowX = rect.x + rect.w * 0.5;
+    const shadowY = rect.y + rect.h * 0.96;
 
     const gradient = ctx.createRadialGradient(
       shadowX,
       shadowY,
-      shadowW * 0.12,
+      rect.w * 0.12,
       shadowX,
       shadowY,
-      shadowW
+      rect.w * 0.58
     );
 
-    gradient.addColorStop(0, "rgba(0,0,0,0.22)");
+    gradient.addColorStop(0, "rgba(0,0,0,0.24)");
     gradient.addColorStop(1, "rgba(0,0,0,0)");
 
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.ellipse(shadowX, shadowY, shadowW, shadowH, 0, 0, Math.PI * 2);
+    ctx.ellipse(shadowX, shadowY, rect.w * 0.65, rect.h * 0.10, 0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
   }
 
-  function drawAtmosphereOverlay(ctx, width, height, theme) {
+  function drawFallbackGliptodonte(ctx, rect) {
     ctx.save();
 
-    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+    drawObjectShadow(ctx, rect);
+
+    ctx.fillStyle = "rgba(125, 92, 55, 0.95)";
+    ctx.beginPath();
+    ctx.ellipse(
+      rect.x + rect.w * 0.48,
+      rect.y + rect.h * 0.54,
+      rect.w * 0.45,
+      rect.h * 0.34,
+      0,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(90, 65, 42, 0.95)";
+    ctx.beginPath();
+    ctx.ellipse(
+      rect.x + rect.w * 0.82,
+      rect.y + rect.h * 0.48,
+      rect.w * 0.16,
+      rect.h * 0.14,
+      0,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawSunBadge(ctx, rect) {
+    ctx.save();
+
+    ctx.fillStyle = "rgba(255, 210, 31, 0.84)";
+    ctx.beginPath();
+    ctx.arc(rect.x + rect.w * 0.5, rect.y + rect.h * 0.5, rect.w * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255,255,255,0.72)";
+    ctx.beginPath();
+    ctx.arc(rect.x + rect.w * 0.42, rect.y + rect.h * 0.44, rect.w * 0.07, 0, Math.PI * 2);
+    ctx.arc(rect.x + rect.w * 0.58, rect.y + rect.h * 0.44, rect.w * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawFossilForeground(ctx, rect) {
+    ctx.save();
+
+    ctx.strokeStyle = "rgba(255,255,255,0.86)";
+    ctx.lineWidth = 12;
+    ctx.lineCap = "round";
+
+    ctx.beginPath();
+    ctx.moveTo(rect.x + rect.w * 0.1, rect.y + rect.h * 0.5);
+    ctx.lineTo(rect.x + rect.w * 0.9, rect.y + rect.h * 0.3);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.beginPath();
+    ctx.arc(rect.x + rect.w * 0.08, rect.y + rect.h * 0.5, rect.w * 0.08, 0, Math.PI * 2);
+    ctx.arc(rect.x + rect.w * 0.92, rect.y + rect.h * 0.3, rect.w * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawVintageCar(ctx, rect) {
+    ctx.save();
+
+    drawObjectShadow(ctx, rect);
+
+    ctx.fillStyle = "rgba(245,245,240,0.96)";
+    ctx.beginPath();
+    ctx.roundRect(rect.x, rect.y + rect.h * 0.28, rect.w, rect.h * 0.34, rect.w * 0.08);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(230,230,225,0.96)";
+    ctx.beginPath();
+    ctx.roundRect(
+      rect.x + rect.w * 0.22,
+      rect.y + rect.h * 0.08,
+      rect.w * 0.42,
+      rect.h * 0.28,
+      rect.w * 0.09
+    );
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(40,40,40,0.95)";
+    ctx.beginPath();
+    ctx.arc(rect.x + rect.w * 0.26, rect.y + rect.h * 0.64, rect.w * 0.11, 0, Math.PI * 2);
+    ctx.arc(rect.x + rect.w * 0.76, rect.y + rect.h * 0.64, rect.w * 0.11, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(20,20,20,0.85)";
+    ctx.font = `bold ${Math.round(rect.w * 0.18)}px Arial`;
+    ctx.textAlign = "center";
+    ctx.fillText("1", rect.x + rect.w * 0.5, rect.y + rect.h * 0.55);
+
+    ctx.restore();
+  }
+
+  function drawToolSign(ctx, rect) {
+    ctx.save();
+
+    ctx.fillStyle = "rgba(63,48,56,0.86)";
+    ctx.beginPath();
+    ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 24);
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(255,255,255,0.78)";
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(rect.x + rect.w * 0.25, rect.y + rect.h * 0.28);
+    ctx.lineTo(rect.x + rect.w * 0.75, rect.y + rect.h * 0.72);
+    ctx.moveTo(rect.x + rect.w * 0.75, rect.y + rect.h * 0.28);
+    ctx.lineTo(rect.x + rect.w * 0.25, rect.y + rect.h * 0.72);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawToolsForeground(ctx, rect) {
+    ctx.save();
+
+    ctx.fillStyle = "rgba(63,48,56,0.70)";
+    ctx.beginPath();
+    ctx.roundRect(rect.x, rect.y + rect.h * 0.42, rect.w, rect.h * 0.18, 18);
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(63,48,56,0.70)";
+    ctx.lineWidth = 10;
+    ctx.lineCap = "round";
+
+    ctx.beginPath();
+    ctx.moveTo(rect.x + rect.w * 0.12, rect.y + rect.h * 0.2);
+    ctx.lineTo(rect.x + rect.w * 0.86, rect.y + rect.h * 0.78);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawAtmosphere(ctx, width, height, theme) {
+    ctx.save();
 
     if (theme === "emiliozzi") {
-      gradient.addColorStop(0, "rgba(255,255,255,0.03)");
-      gradient.addColorStop(1, "rgba(120,95,70,0.08)");
+      ctx.fillStyle = "rgba(80,70,65,0.10)";
     } else {
-      gradient.addColorStop(0, "rgba(255,230,170,0.04)");
-      gradient.addColorStop(1, "rgba(181,140,70,0.10)");
+      ctx.fillStyle = "rgba(255,210,90,0.08)";
     }
 
-    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
     ctx.restore();
   }
 
-  function drawVignette(ctx, width, height) {
-    const gradient = ctx.createRadialGradient(
-      width / 2,
-      height / 2,
-      height * 0.12,
-      width / 2,
-      height / 2,
-      height * 0.8
-    );
+  async function loadImageWithoutLightBackground(src) {
+    const img = await loadImage(src);
 
-    gradient.addColorStop(0, "rgba(0,0,0,0)");
-    gradient.addColorStop(1, "rgba(0,0,0,0.22)");
+    const tempCanvas = document.createElement("canvas");
+    const tempCtx = tempCanvas.getContext("2d");
 
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
-  }
+    tempCanvas.width = img.width;
+    tempCanvas.height = img.height;
 
-  function drawFallbackMegafaunaBackground(ctx, width, height) {
-    const bg = ctx.createLinearGradient(0, 0, 0, height);
-    bg.addColorStop(0, "#f9efe6");
-    bg.addColorStop(0.55, "#e7d5a8");
-    bg.addColorStop(1, "#b7d39e");
+    tempCtx.drawImage(img, 0, 0);
 
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, width, height);
-  }
+    const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+    const data = imageData.data;
 
-  function drawFallbackEmiliozziBackground(ctx, width, height) {
-    const bg = ctx.createLinearGradient(0, 0, 0, height);
-    bg.addColorStop(0, "#fbfbfb");
-    bg.addColorStop(0.5, "#dbeffd");
-    bg.addColorStop(1, "#efe1cb");
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
 
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, width, height);
+      if (a === 0) continue;
+
+      const isVeryLight = r > 210 && g > 210 && b > 210;
+      const colorDifference = Math.max(r, g, b) - Math.min(r, g, b);
+      const isNeutralLight = isVeryLight && colorDifference < 40;
+
+      if (isNeutralLight) {
+        data[i + 3] = 0;
+      }
+    }
+
+    tempCtx.putImageData(imageData, 0, 0);
+
+    return loadImage(tempCanvas.toDataURL("image/png"));
   }
 
   function clamp(value, min, max) {
@@ -832,7 +805,7 @@ function App() {
 
     ctx.textAlign = "center";
     ctx.fillStyle = "#ffffff";
-    ctx.shadowColor = "rgba(0,0,0,0.72)";
+    ctx.shadowColor = "rgba(0,0,0,0.74)";
     ctx.shadowBlur = 10;
 
     ctx.font = `bold ${Math.round(width * 0.043)}px Arial, sans-serif`;
@@ -860,6 +833,7 @@ function App() {
     try {
       const response = await fetch(finalImage);
       const blob = await response.blob();
+
       const file = new File([blob], "postal-viva.png", {
         type: "image/png",
       });
@@ -1009,7 +983,7 @@ function App() {
 
                 <div className="instructions">
                   <strong>Acomodá a las personas en los encuadres</strong>
-                  <span>Arrastrá cada guía con el dedo.</span>
+                  <span>Los objetos se ubican para no taparlas.</span>
                 </div>
               </div>
 
@@ -1027,7 +1001,7 @@ function App() {
             <div className="processing">
               <div className="spinner"></div>
               <h2>Creando postal…</h2>
-              <p>Suavizando recorte y armando la escena.</p>
+              <p>Agregando objetos alrededor de la persona.</p>
             </div>
           )}
 
@@ -1042,7 +1016,7 @@ function App() {
           <div>
             <p className="tag">Postal automática</p>
 
-            <h2>Recorte automático V23</h2>
+            <h2>Objetos sin solapar V24</h2>
 
             {currentScene ? (
               <div className="detectedCard">
@@ -1066,8 +1040,8 @@ function App() {
             )}
 
             <p>
-              Esta versión recorta automáticamente lo humano de la foto y lo
-              monta sobre el fondo del espacio.
+              Esta versión no cambia el fondo: usa una toma limpia con piso y
+              agrega objetos según la ubicación de las personas.
             </p>
           </div>
 

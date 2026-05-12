@@ -107,6 +107,16 @@ function App() {
       }
     };
   }, [stream]);
+useEffect(() => {
+  if (
+    (status === "camera" || status === "starting") &&
+    videoRef.current &&
+    stream
+  ) {
+    videoRef.current.srcObject = stream;
+  }
+}, [status, stream]);
+
 
   function loadSpaceFromUrl() {
     const params = new URLSearchParams(window.location.search);

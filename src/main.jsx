@@ -341,7 +341,7 @@ function App() {
       const scene = currentScene;
       const base = await loadImage(capturedImage);
 
-      drawThemeBackground(ctx, width, height, scene);
+      await drawThemeBackground(ctx, width, height, scene);
       drawCapturedPeople(ctx, base, width, height);
       drawForegroundTheme(ctx, width, height, scene);
       drawVignette(ctx, width, height);
@@ -377,7 +377,19 @@ function App() {
     ctx.restore();
   }
 
-  function drawThemeBackground(ctx, width, height, scene) {
+ async function drawThemeBackground(ctx, width, height, scene) {
+  try {
+    if (scene.theme === "emiliozzi") {
+      const fondo = await loadImage("/assets/fondos/emiliozzi-fondo.jpg");
+      drawCoverImage(ctx, fondo, width, height);
+      return;
+    }
+
+    const fondo = await loadImage("/assets/fondos/megafauna-fondo.jpg");
+    drawCoverImage(ctx, fondo, width, height);
+  } catch (err) {
+    console.error("No se pudo cargar el fondo:", err);
+
     if (scene.theme === "emiliozzi") {
       drawEmiliozziBackground(ctx, width, height);
       return;
@@ -385,6 +397,7 @@ function App() {
 
     drawMegafaunaBackground(ctx, width, height);
   }
+}
 
   function drawMegafaunaBackground(ctx, width, height) {
     const sky = ctx.createLinearGradient(0, 0, 0, height);
@@ -550,6 +563,30 @@ function App() {
       img.src = src;
     });
   }
+
+  function drawCoverImage(ctx, img, canvasWidth, canvasHeight) {
+  const imageRatio = img.width / img.height;
+  const canvasRatio = canvasWidth / canvasHeight;
+
+  let drawWidth;
+  let drawHeight;
+  let drawX;
+  let drawY;
+
+  if (imageRatio > canvasRatio) {
+    drawHeight = canvasHeight;
+    drawWidth = canvasHeight * imageRatio;
+    drawX = (canvasWidth - drawWidth) / 2;
+    drawY = 0;
+  } else {
+    drawWidth = canvasWidth;
+    drawHeight = canvasWidth / imageRatio;
+    drawX = 0;
+    drawY = (canvasHeight - drawHeight) / 2;
+  }
+
+  ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+}
 
   function drawVignette(ctx, width, height) {
     const gradient = ctx.createRadialGradient(
@@ -745,9 +782,7 @@ function App() {
               </div>
 
               <div className="overlay">
-                <div className="backgroundZone">
-                  <span>Fondo temático</span>
-                </div>
+                
 
                 {activeGuides.map((guide) => (
                   <div

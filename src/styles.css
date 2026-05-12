@@ -715,3 +715,16 @@ video {
     font-size: 14px;
   }
 }
+.centerPhotoArea {
+  position: absolute;
+  left: 18%;
+  top: 23%;
+  width: 64%;
+  height: 67%;
+  border: 4px solid rgba(255, 210, 31, 0.95);
+  border-radius: 30px;
+  background: rgba(255, 210, 31, 0.08);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+  z-index: 4;
+}

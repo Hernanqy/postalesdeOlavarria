@@ -7,33 +7,21 @@ const SCENES = [
     id: "museo-ciencias",
     name: "Museo de Ciencias",
     postalTitle: "Museo de Ciencias",
-    postalSubtitle: "Megafauna · Gliptodonte",
+    postalSubtitle: "Megafauna · Exploradores del pasado",
     lat: -36.8927,
     lng: -60.3225,
     radiusMeters: 400,
-    character: "/assets/personajes/gliptodonte.png",
-    characterBox: {
-      x: 0.01,
-      y: 0.42,
-      w: 0.46,
-      h: 0.42,
-    },
+    theme: "megafauna",
   },
   {
     id: "museo-emiliozzi",
     name: "Museo Emiliozzi",
     postalTitle: "Museo Emiliozzi",
-    postalSubtitle: "Hermanos Emiliozzi",
+    postalSubtitle: "Automovilismo histórico",
     lat: -36.8935,
     lng: -60.3215,
     radiusMeters: 400,
-    character: "/assets/personajes/gliptodonte.png",
-    characterBox: {
-      x: 0.58,
-      y: 0.35,
-      w: 0.34,
-      h: 0.48,
-    },
+    theme: "emiliozzi",
   },
 ];
 
@@ -41,7 +29,7 @@ function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const cameraBoxRef = useRef(null);
-  const draggingGuideRef = useRef(false);
+  const draggingGuideRef = useRef(null);
 
   const [stream, setStream] = useState(null);
   const [status, setStatus] = useState("idle");
@@ -52,10 +40,26 @@ function App() {
   const [currentScene, setCurrentScene] = useState(null);
   const [locationStatus, setLocationStatus] = useState("pending");
 
-  const [guideX, setGuideX] = useState(50);
-  const [guideY, setGuideY] = useState(50);
-  const [guideW] = useState(34);
-  const [guideH] = useState(70);
+  const [peopleCount, setPeopleCount] = useState(1);
+
+  const [guides, setGuides] = useState([
+    {
+      id: "person-1",
+      label: "Persona 1",
+      x: 50,
+      y: 50,
+      w: 34,
+      h: 70,
+    },
+    {
+      id: "person-2",
+      label: "Persona 2",
+      x: 68,
+      y: 50,
+      w: 30,
+      h: 68,
+    },
+  ]);
 
   useEffect(() => {
     detectLocation();
@@ -95,7 +99,6 @@ function App() {
       (position) => {
         const userLat = position.coords.latitude;
         const userLng = position.coords.longitude;
-
         const nearestScene = findNearestScene(userLat, userLng);
 
         if (nearestScene) {
@@ -212,22 +215,68 @@ function App() {
     }
   }
 
-  function startDraggingGuide(event) {
+  function setPeople(amount) {
+    setPeopleCount(amount);
+
+    if (amount === 1) {
+      setGuides([
+        {
+          id: "person-1",
+          label: "Persona 1",
+          x: 50,
+          y: 50,
+          w: 36,
+          h: 72,
+        },
+        {
+          id: "person-2",
+          label: "Persona 2",
+          x: 68,
+          y: 50,
+          w: 30,
+          h: 68,
+        },
+      ]);
+    }
+
+    if (amount === 2) {
+      setGuides([
+        {
+          id: "person-1",
+          label: "Persona 1",
+          x: 38,
+          y: 50,
+          w: 30,
+          h: 68,
+        },
+        {
+          id: "person-2",
+          label: "Persona 2",
+          x: 64,
+          y: 50,
+          w: 30,
+          h: 68,
+        },
+      ]);
+    }
+  }
+
+  function startDraggingGuide(event, guideId) {
     event.preventDefault();
-    draggingGuideRef.current = true;
-    moveGuideToPointer(event);
+    draggingGuideRef.current = guideId;
+    moveGuideToPointer(event, guideId);
   }
 
   function stopDraggingGuide() {
-    draggingGuideRef.current = false;
+    draggingGuideRef.current = null;
   }
 
   function handlePointerMove(event) {
     if (!draggingGuideRef.current) return;
-    moveGuideToPointer(event);
+    moveGuideToPointer(event, draggingGuideRef.current);
   }
 
-  function moveGuideToPointer(event) {
+  function moveGuideToPointer(event, guideId) {
     const cameraBox = cameraBoxRef.current;
 
     if (!cameraBox) return;
@@ -237,8 +286,17 @@ function App() {
     const x = ((event.clientX - rect.left) / rect.width) * 100;
     const y = ((event.clientY - rect.top) / rect.height) * 100;
 
-    setGuideX(clamp(x, 15, 85));
-    setGuideY(clamp(y, 22, 78));
+    setGuides((prev) =>
+      prev.map((guide) =>
+        guide.id === guideId
+          ? {
+              ...guide,
+              x: clamp(x, 14, 86),
+              y: clamp(y, 24, 78),
+            }
+          : guide
+      )
+    );
   }
 
   function capturePhoto() {
@@ -268,7 +326,7 @@ function App() {
 
       setTimeout(() => {
         createPostal(capturedImage, width, height);
-      }, 450);
+      }, 650);
     }, 180);
   }
 
@@ -283,23 +341,9 @@ function App() {
       const scene = currentScene;
       const base = await loadImage(capturedImage);
 
-      ctx.drawImage(base, 0, 0, width, height);
-
-      ctx.fillStyle = "rgba(255, 196, 0, 0.08)";
-      ctx.fillRect(0, 0, width, height);
-
-      const character = await loadImageWithoutLightBackground(scene.character);
-
-      drawPng(
-        ctx,
-        character,
-        width * scene.characterBox.x,
-        height * scene.characterBox.y,
-        width * scene.characterBox.w,
-        height * scene.characterBox.h
-      );
-
-      drawSoftColorWaves(ctx, width, height);
+      drawThemeBackground(ctx, width, height, scene);
+      drawCapturedPeople(ctx, base, width, height);
+      drawForegroundTheme(ctx, width, height, scene);
       drawVignette(ctx, width, height);
       drawPostalFrame(ctx, width, height);
       drawSceneText(ctx, width, height, scene.postalTitle, scene.postalSubtitle);
@@ -310,9 +354,185 @@ function App() {
       setStatus("result");
     } catch (err) {
       console.error(err);
-      setError("No se pudo crear la postal. Revisá que existan los PNG.");
+      setError("No se pudo crear la postal.");
       setStatus("camera");
     }
+  }
+
+  function drawCapturedPeople(ctx, base, width, height) {
+    // En esta prueba sin IA usamos la foto real completa,
+    // pero la fusionamos con el fondo temático.
+    // Más adelante podemos recortar la persona si sumamos segmentación local.
+    ctx.save();
+
+    ctx.globalAlpha = 0.92;
+    ctx.drawImage(base, 0, 0, width, height);
+
+    // Mezcla de color para que parezca postal.
+    ctx.globalCompositeOperation = "soft-light";
+    ctx.fillStyle = "rgba(255, 210, 31, 0.22)";
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.globalCompositeOperation = "source-over";
+    ctx.restore();
+  }
+
+  function drawThemeBackground(ctx, width, height, scene) {
+    if (scene.theme === "emiliozzi") {
+      drawEmiliozziBackground(ctx, width, height);
+      return;
+    }
+
+    drawMegafaunaBackground(ctx, width, height);
+  }
+
+  function drawMegafaunaBackground(ctx, width, height) {
+    const sky = ctx.createLinearGradient(0, 0, 0, height);
+    sky.addColorStop(0, "#f9efe6");
+    sky.addColorStop(0.5, "#f7e4c8");
+    sky.addColorStop(1, "#d8efc5");
+
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.save();
+
+    ctx.fillStyle = "rgba(18, 155, 227, 0.18)";
+    ctx.beginPath();
+    ctx.ellipse(width * 0.32, height * 0.62, width * 0.42, height * 0.18, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(39, 168, 68, 0.22)";
+    ctx.beginPath();
+    ctx.ellipse(width * 0.75, height * 0.70, width * 0.48, height * 0.20, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255, 210, 31, 0.28)";
+    ctx.beginPath();
+    ctx.ellipse(width * 0.48, height * 0.82, width * 0.55, height * 0.20, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sol
+    ctx.fillStyle = "rgba(255, 210, 31, 0.65)";
+    ctx.beginPath();
+    ctx.arc(width * 0.82, height * 0.18, width * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawEmiliozziBackground(ctx, width, height) {
+    const bg = ctx.createLinearGradient(0, 0, 0, height);
+    bg.addColorStop(0, "#f8f8f8");
+    bg.addColorStop(0.55, "#dceef8");
+    bg.addColorStop(1, "#f7e8d2");
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.save();
+
+    // pista
+    ctx.fillStyle = "rgba(63, 48, 56, 0.28)";
+    ctx.beginPath();
+    ctx.moveTo(0, height * 0.72);
+    ctx.lineTo(width, height * 0.58);
+    ctx.lineTo(width, height);
+    ctx.lineTo(0, height);
+    ctx.closePath();
+    ctx.fill();
+
+    // líneas
+    ctx.strokeStyle = "rgba(255,255,255,0.65)";
+    ctx.lineWidth = width * 0.012;
+    ctx.beginPath();
+    ctx.moveTo(width * 0.1, height * 0.84);
+    ctx.lineTo(width * 0.9, height * 0.68);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawForegroundTheme(ctx, width, height, scene) {
+    if (scene.theme === "emiliozzi") {
+      drawEmiliozziForeground(ctx, width, height);
+      return;
+    }
+
+    drawMegafaunaForeground(ctx, width, height);
+  }
+
+  function drawMegafaunaForeground(ctx, width, height) {
+    ctx.save();
+
+    // pasto inferior
+    ctx.fillStyle = "rgba(39, 168, 68, 0.30)";
+    ctx.beginPath();
+    ctx.ellipse(width * 0.5, height * 1.02, width * 0.62, height * 0.18, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // silueta de hueso / fósil
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.68)";
+    ctx.lineWidth = width * 0.018;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(width * 0.08, height * 0.76);
+    ctx.lineTo(width * 0.24, height * 0.72);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
+    ctx.beginPath();
+    ctx.arc(width * 0.07, height * 0.76, width * 0.03, 0, Math.PI * 2);
+    ctx.arc(width * 0.25, height * 0.72, width * 0.03, 0, Math.PI * 2);
+    ctx.fill();
+
+    // polvo / atmósfera
+    for (let i = 0; i < 26; i++) {
+      const x = width * randomFrom(i, 0.05, 0.95);
+      const y = height * randomFrom(i + 9, 0.20, 0.72);
+      const r = width * randomFrom(i + 3, 0.004, 0.012);
+
+      ctx.fillStyle = "rgba(255,255,255,0.32)";
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  function drawEmiliozziForeground(ctx, width, height) {
+    ctx.save();
+
+    // ruedas / auto simplificado en primer plano
+    ctx.fillStyle = "rgba(63, 48, 56, 0.86)";
+    ctx.beginPath();
+    ctx.roundRect(width * 0.12, height * 0.66, width * 0.36, height * 0.11, width * 0.04);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(18, 155, 227, 0.90)";
+    ctx.beginPath();
+    ctx.roundRect(width * 0.18, height * 0.58, width * 0.20, height * 0.10, width * 0.04);
+    ctx.fill();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(width * 0.20, height * 0.78, width * 0.045, 0, Math.PI * 2);
+    ctx.arc(width * 0.42, height * 0.78, width * 0.045, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(63, 48, 56, 0.9)";
+    ctx.beginPath();
+    ctx.arc(width * 0.20, height * 0.78, width * 0.025, 0, Math.PI * 2);
+    ctx.arc(width * 0.42, height * 0.78, width * 0.025, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function randomFrom(seed, min, max) {
+    const x = Math.sin(seed * 999) * 10000;
+    return min + (x - Math.floor(x)) * (max - min);
   }
 
   function clamp(value, min, max) {
@@ -331,120 +551,6 @@ function App() {
     });
   }
 
-  function loadImageWithoutLightBackground(src) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-
-      img.onload = () => {
-        const tempCanvas = document.createElement("canvas");
-        const tempCtx = tempCanvas.getContext("2d");
-
-        tempCanvas.width = img.width;
-        tempCanvas.height = img.height;
-
-        tempCtx.drawImage(img, 0, 0);
-
-        const imageData = tempCtx.getImageData(
-          0,
-          0,
-          tempCanvas.width,
-          tempCanvas.height
-        );
-
-        const data = imageData.data;
-
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          const a = data[i + 3];
-
-          if (a === 0) continue;
-
-          const isVeryLight = r > 210 && g > 210 && b > 210;
-          const colorDifference = Math.max(r, g, b) - Math.min(r, g, b);
-          const isNeutralLight = isVeryLight && colorDifference < 35;
-
-          if (isNeutralLight) {
-            data[i + 3] = 0;
-          }
-        }
-
-        tempCtx.putImageData(imageData, 0, 0);
-
-        const cleanedImg = new Image();
-
-        cleanedImg.onload = () => resolve(cleanedImg);
-        cleanedImg.onerror = reject;
-        cleanedImg.src = tempCanvas.toDataURL("image/png");
-      };
-
-      img.onerror = () =>
-        reject(new Error("No se pudo cargar la imagen: " + src));
-
-      img.src = src;
-    });
-  }
-
-  function drawPng(ctx, img, x, y, w, h) {
-    ctx.save();
-
-    ctx.shadowColor = "rgba(0,0,0,0.45)";
-    ctx.shadowBlur = 18;
-    ctx.shadowOffsetX = 8;
-    ctx.shadowOffsetY = 10;
-
-    ctx.drawImage(img, x, y, w, h);
-
-    ctx.restore();
-  }
-
-  function drawSoftColorWaves(ctx, width, height) {
-    ctx.save();
-    ctx.globalAlpha = 0.18;
-
-    ctx.fillStyle = "#FFD21F";
-    ctx.beginPath();
-    ctx.ellipse(
-      width * 0.18,
-      height * 0.92,
-      width * 0.35,
-      height * 0.18,
-      -0.2,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-
-    ctx.fillStyle = "#27A844";
-    ctx.beginPath();
-    ctx.ellipse(
-      width * 0.85,
-      height * 0.86,
-      width * 0.34,
-      height * 0.18,
-      0.2,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-
-    ctx.fillStyle = "#129BE3";
-    ctx.beginPath();
-    ctx.ellipse(
-      width * 0.55,
-      height * 0.95,
-      width * 0.42,
-      height * 0.15,
-      0.05,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-
-    ctx.restore();
-  }
-
   function drawVignette(ctx, width, height) {
     const gradient = ctx.createRadialGradient(
       width / 2,
@@ -456,7 +562,7 @@ function App() {
     );
 
     gradient.addColorStop(0, "rgba(0,0,0,0)");
-    gradient.addColorStop(1, "rgba(0,0,0,0.34)");
+    gradient.addColorStop(1, "rgba(0,0,0,0.32)");
 
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
@@ -467,11 +573,11 @@ function App() {
 
     ctx.save();
 
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.94)";
     ctx.lineWidth = border;
     ctx.strokeRect(border / 2, border / 2, width - border, height - border);
 
-    ctx.strokeStyle = "rgba(255, 210, 31, 0.85)";
+    ctx.strokeStyle = "rgba(255, 210, 31, 0.86)";
     ctx.lineWidth = 6;
     ctx.strokeRect(border, border, width - border * 2, height - border * 2);
 
@@ -483,8 +589,8 @@ function App() {
 
     ctx.textAlign = "center";
     ctx.fillStyle = "#ffffff";
-    ctx.shadowColor = "rgba(0,0,0,0.65)";
-    ctx.shadowBlur = 8;
+    ctx.shadowColor = "rgba(0,0,0,0.68)";
+    ctx.shadowBlur = 9;
 
     ctx.font = `bold ${Math.round(width * 0.043)}px Arial, sans-serif`;
     ctx.fillText(title.toUpperCase(), width / 2, height * 0.88);
@@ -537,12 +643,7 @@ function App() {
     setStatus(stream ? "camera" : "idle");
   }
 
-  const safePersonStyle = {
-    left: `${guideX}%`,
-    top: `${guideY}%`,
-    width: `${guideW}%`,
-    height: `${guideH}%`,
-  };
+  const activeGuides = guides.slice(0, peopleCount);
 
   return (
     <main className="app">
@@ -574,6 +675,22 @@ function App() {
                     Postal detectada:{" "}
                     <strong>{currentScene.postalSubtitle}</strong>
                   </p>
+
+                  <div className="peopleSelector">
+                    <button
+                      className={peopleCount === 1 ? "selected" : ""}
+                      onClick={() => setPeople(1)}
+                    >
+                      1 persona
+                    </button>
+
+                    <button
+                      className={peopleCount === 2 ? "selected" : ""}
+                      onClick={() => setPeople(2)}
+                    >
+                      2 personas
+                    </button>
+                  </div>
 
                   <button className="startButton" onClick={startCamera}>
                     <span>📷</span>
@@ -628,21 +745,29 @@ function App() {
               </div>
 
               <div className="overlay">
-                <div
-                  className="safePerson"
-                  style={safePersonStyle}
-                  onPointerDown={startDraggingGuide}
-                >
-                  <span className="dragHint">Arrastrar</span>
+                <div className="backgroundZone">
+                  <span>Fondo temático</span>
                 </div>
 
-                <div className="leftZone">
-                  <span>Personaje</span>
-                </div>
+                {activeGuides.map((guide) => (
+                  <div
+                    key={guide.id}
+                    className="safePerson"
+                    style={{
+                      left: `${guide.x}%`,
+                      top: `${guide.y}%`,
+                      width: `${guide.w}%`,
+                      height: `${guide.h}%`,
+                    }}
+                    onPointerDown={(event) => startDraggingGuide(event, guide.id)}
+                  >
+                    <span className="dragHint">{guide.label}</span>
+                  </div>
+                ))}
 
                 <div className="instructions">
-                  <strong>Ubicá a la persona dentro de la guía</strong>
-                  <span>Arrastrá el encuadre con el dedo.</span>
+                  <strong>Acomodá a las personas en los encuadres</strong>
+                  <span>Arrastrá cada guía con el dedo.</span>
                 </div>
               </div>
 
@@ -660,7 +785,7 @@ function App() {
             <div className="processing">
               <div className="spinner"></div>
               <h2>Creando postal…</h2>
-              <p>Agregando la escena de este lugar.</p>
+              <p>Fusionando la foto con la escena temática.</p>
             </div>
           )}
 
@@ -675,7 +800,7 @@ function App() {
           <div>
             <p className="tag">Postal automática</p>
 
-            <h2>La app detecta tu lugar</h2>
+            <h2>Postal temática sin costo por foto</h2>
 
             {currentScene ? (
               <div className="detectedCard">
@@ -702,8 +827,8 @@ function App() {
             )}
 
             <p>
-              La postal se define por ubicación. Más adelante cargamos las
-              coordenadas reales de cada museo o punto fotográfico.
+              La app carga una escena por ubicación, permite ubicar una o dos
+              personas y genera una postal con composición local.
             </p>
           </div>
 

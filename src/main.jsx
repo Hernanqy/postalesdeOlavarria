@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { SelfieSegmentation } from "@mediapipe/selfie_segmentation";
 import "./styles.css";
 
 const SCENES = [
@@ -32,6 +33,7 @@ function App() {
   const canvasRef = useRef(null);
   const cameraBoxRef = useRef(null);
   const draggingGuideRef = useRef(null);
+  const segmenterRef = useRef(null);
 
   const [stream, setStream] = useState(null);
   const [status, setStatus] = useState("idle");
@@ -65,6 +67,7 @@ function App() {
 
   useEffect(() => {
     detectLocation();
+    initializeSegmenter();
   }, []);
 
   useEffect(() => {
@@ -86,6 +89,19 @@ function App() {
       }
     };
   }, [stream]);
+
+  function initializeSegmenter() {
+    const segmenter = new SelfieSegmentation({
+      locateFile: (file) =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
+    });
+
+    segmenter.setOptions({
+      modelSelection: 1,
+    });
+
+    segmenterRef.current = segmenter;
+  }
 
   function detectLocation() {
     setError("");
@@ -217,7 +233,7 @@ function App() {
     }
   }
 
-  function setPeople(amount) {
+  function selectPeople(amount) {
     setPeopleCount(amount);
 
     if (amount === 1) {
@@ -280,7 +296,6 @@ function App() {
 
   function moveGuideToPointer(event, guideId) {
     const cameraBox = cameraBoxRef.current;
-
     if (!cameraBox) return;
 
     const rect = cameraBox.getBoundingClientRect();
@@ -321,15 +336,15 @@ function App() {
       const ctx = canvas.getContext("2d");
       ctx.drawImage(video, 0, 0, width, height);
 
-      const capturedImage = canvas.toDataURL("image/jpeg", 0.92);
+      const capturedImage = canvas.toDataURL("image/jpeg", 0.95);
 
       setStatus("processing");
       setIsCapturing(false);
 
       setTimeout(() => {
         createPostal(capturedImage, width, height);
-      }, 650);
-    }, 180);
+      }, 250);
+    }, 160);
   }
 
   async function createPostal(capturedImage, width, height) {
@@ -341,17 +356,21 @@ function App() {
 
     try {
       const scene = currentScene;
-      const base = await loadImage(capturedImage);
 
       await drawThemeBackground(ctx, width, height, scene);
-      drawCapturedPeople(ctx, base, width, height);
-      drawThemeColorOverlay(ctx, width, height, scene);
-      drawVignette(ctx, width, height);
+
+      const cutoutCanvas = await segmentPeopleFromImage(
+        capturedImage,
+        width,
+        height
+      );
+
+      drawPeopleCutout(ctx, cutoutCanvas, width, height);
+      drawGroundShadow(ctx, width, height);
       drawPostalFrame(ctx, width, height);
       drawSceneText(ctx, width, height, scene.postalTitle, scene.postalSubtitle);
 
       const result = canvas.toDataURL("image/png");
-
       setFinalImage(result);
       setStatus("result");
     } catch (err) {
@@ -361,70 +380,99 @@ function App() {
     }
   }
 
+  async function segmentPeopleFromImage(imageSrc, width, height) {
+    if (!segmenterRef.current) {
+      throw new Error("La segmentación todavía no está lista.");
+    }
+
+    const sourceImage = await loadImage(imageSrc);
+    const segmenter = segmenterRef.current;
+
+    return new Promise((resolve, reject) => {
+      const cutoutCanvas = document.createElement("canvas");
+      const cutoutCtx = cutoutCanvas.getContext("2d");
+
+      cutoutCanvas.width = width;
+      cutoutCanvas.height = height;
+
+      segmenter.onResults((results) => {
+        try {
+          cutoutCtx.clearRect(0, 0, width, height);
+
+          cutoutCtx.drawImage(results.segmentationMask, 0, 0, width, height);
+          cutoutCtx.globalCompositeOperation = "source-in";
+          cutoutCtx.drawImage(results.image, 0, 0, width, height);
+          cutoutCtx.globalCompositeOperation = "source-over";
+
+          resolve(cutoutCanvas);
+        } catch (error) {
+          reject(error);
+        }
+      });
+
+      segmenter.send({ image: sourceImage }).catch(reject);
+    });
+  }
+
   async function drawThemeBackground(ctx, width, height, scene) {
     try {
-      const fondo = await loadImage(scene.background);
-      drawCoverImage(ctx, fondo, width, height);
+      const background = await loadImage(scene.background);
+      drawCoverImage(ctx, background, width, height);
     } catch (err) {
       console.error("No se pudo cargar el fondo:", err);
 
       if (scene.theme === "emiliozzi") {
-        drawEmiliozziFallbackBackground(ctx, width, height);
+        drawFallbackEmiliozziBackground(ctx, width, height);
         return;
       }
 
-      drawMegafaunaFallbackBackground(ctx, width, height);
+      drawFallbackMegafaunaBackground(ctx, width, height);
     }
   }
 
-  function drawCapturedPeople(ctx, base, width, height) {
+  function drawPeopleCutout(ctx, cutoutCanvas, width, height) {
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.drawImage(cutoutCanvas, 0, 0, width, height);
+    ctx.restore();
+  }
+
+  function drawGroundShadow(ctx, width, height) {
     ctx.save();
 
-    /*
-      La foto real se mezcla con el fondo.
-      Si querés que se vea más la foto real, subí este número.
-      Si querés que se vea más el fondo temático, bajalo.
-    */
-    ctx.globalAlpha = 0.42;
-    ctx.drawImage(base, 0, 0, width, height);
+    const gradient = ctx.createRadialGradient(
+      width * 0.5,
+      height * 0.85,
+      width * 0.05,
+      width * 0.5,
+      height * 0.85,
+      width * 0.34
+    );
 
-    ctx.globalCompositeOperation = "soft-light";
-    ctx.globalAlpha = 0.45;
-    ctx.fillStyle = "rgba(255, 210, 31, 0.25)";
+    gradient.addColorStop(0, "rgba(0,0,0,0.18)");
+    gradient.addColorStop(1, "rgba(0,0,0,0)");
+
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
     ctx.restore();
   }
 
-  function drawThemeColorOverlay(ctx, width, height, scene) {
-    ctx.save();
-
-    if (scene.theme === "emiliozzi") {
-      ctx.fillStyle = "rgba(40, 34, 30, 0.22)";
-      ctx.fillRect(0, 0, width, height);
-    } else {
-      ctx.fillStyle = "rgba(255, 205, 80, 0.12)";
-      ctx.fillRect(0, 0, width, height);
-    }
-
-    ctx.restore();
-  }
-
-  function drawMegafaunaFallbackBackground(ctx, width, height) {
-    const sky = ctx.createLinearGradient(0, 0, 0, height);
-    sky.addColorStop(0, "#f9efe6");
-    sky.addColorStop(0.5, "#f7e4c8");
-    sky.addColorStop(1, "#d8efc5");
-
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, width, height);
-  }
-
-  function drawEmiliozziFallbackBackground(ctx, width, height) {
+  function drawFallbackMegafaunaBackground(ctx, width, height) {
     const bg = ctx.createLinearGradient(0, 0, 0, height);
-    bg.addColorStop(0, "#f8f8f8");
-    bg.addColorStop(0.55, "#dceef8");
-    bg.addColorStop(1, "#f7e8d2");
+    bg.addColorStop(0, "#f9efe6");
+    bg.addColorStop(0.55, "#e7d5a8");
+    bg.addColorStop(1, "#b7d39e");
+
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  function drawFallbackEmiliozziBackground(ctx, width, height) {
+    const bg = ctx.createLinearGradient(0, 0, 0, height);
+    bg.addColorStop(0, "#fbfbfb");
+    bg.addColorStop(0.5, "#dbeffd");
+    bg.addColorStop(1, "#efe1cb");
 
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, width, height);
@@ -437,11 +485,9 @@ function App() {
   function loadImage(src) {
     return new Promise((resolve, reject) => {
       const img = new Image();
-
       img.onload = () => resolve(img);
       img.onerror = () =>
         reject(new Error("No se pudo cargar la imagen: " + src));
-
       img.src = src;
     });
   }
@@ -470,36 +516,17 @@ function App() {
     ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
   }
 
-  function drawVignette(ctx, width, height) {
-    const gradient = ctx.createRadialGradient(
-      width / 2,
-      height / 2,
-      height * 0.12,
-      width / 2,
-      height / 2,
-      height * 0.78
-    );
-
-    gradient.addColorStop(0, "rgba(0,0,0,0)");
-    gradient.addColorStop(1, "rgba(0,0,0,0.32)");
-
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
-  }
-
   function drawPostalFrame(ctx, width, height) {
     const border = Math.max(20, width * 0.026);
 
     ctx.save();
-
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.94)";
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";
     ctx.lineWidth = border;
     ctx.strokeRect(border / 2, border / 2, width - border, height - border);
 
-    ctx.strokeStyle = "rgba(255, 210, 31, 0.86)";
+    ctx.strokeStyle = "rgba(255,210,31,0.9)";
     ctx.lineWidth = 6;
     ctx.strokeRect(border, border, width - border * 2, height - border * 2);
-
     ctx.restore();
   }
 
@@ -508,8 +535,8 @@ function App() {
 
     ctx.textAlign = "center";
     ctx.fillStyle = "#ffffff";
-    ctx.shadowColor = "rgba(0,0,0,0.68)";
-    ctx.shadowBlur = 9;
+    ctx.shadowColor = "rgba(0,0,0,0.72)";
+    ctx.shadowBlur = 10;
 
     ctx.font = `bold ${Math.round(width * 0.043)}px Arial, sans-serif`;
     ctx.fillText(title.toUpperCase(), width / 2, height * 0.88);
@@ -536,7 +563,6 @@ function App() {
     try {
       const response = await fetch(finalImage);
       const blob = await response.blob();
-
       const file = new File([blob], "postal-viva.png", {
         type: "image/png",
       });
@@ -583,9 +609,7 @@ function App() {
               {locationStatus === "detecting" && (
                 <>
                   <h2>Buscando tu lugar…</h2>
-                  <p>
-                    Permití la ubicación para cargar la postal correspondiente.
-                  </p>
+                  <p>Permití la ubicación para cargar la postal correspondiente.</p>
                 </>
               )}
 
@@ -600,14 +624,14 @@ function App() {
                   <div className="peopleSelector">
                     <button
                       className={peopleCount === 1 ? "selected" : ""}
-                      onClick={() => setPeople(1)}
+                      onClick={() => selectPeople(1)}
                     >
                       1 persona
                     </button>
 
                     <button
                       className={peopleCount === 2 ? "selected" : ""}
-                      onClick={() => setPeople(2)}
+                      onClick={() => selectPeople(2)}
                     >
                       2 personas
                     </button>
@@ -704,7 +728,7 @@ function App() {
             <div className="processing">
               <div className="spinner"></div>
               <h2>Creando postal…</h2>
-              <p>Fusionando la foto con la escena temática.</p>
+              <p>Recortando personas y armando la escena.</p>
             </div>
           )}
 
@@ -719,16 +743,14 @@ function App() {
           <div>
             <p className="tag">Postal automática</p>
 
-            <h2>Postal temática sin costo por foto</h2>
+            <h2>Recorte automático</h2>
 
             {currentScene ? (
               <div className="detectedCard">
                 <span className="pin yellow"></span>
-
                 <div>
                   <strong>{currentScene.name}</strong>
                   <small>{currentScene.postalSubtitle}</small>
-
                   {currentScene.distance !== undefined && (
                     <small>Aprox. {currentScene.distance} m de distancia</small>
                   )}
@@ -737,17 +759,16 @@ function App() {
             ) : (
               <div className="detectedCard">
                 <span className="pin blue"></span>
-
                 <div>
                   <strong>Detectando ubicación</strong>
-                  <small>No se muestran lugares manuales.</small>
+                  <small>Esperando una postal activa.</small>
                 </div>
               </div>
             )}
 
             <p>
-              La app carga una escena por ubicación, permite ubicar una o dos
-              personas y genera una postal con composición local.
+              Esta versión recorta automáticamente lo humano de la foto y lo
+              monta sobre el fondo del espacio.
             </p>
           </div>
 

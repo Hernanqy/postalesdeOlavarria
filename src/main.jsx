@@ -5,21 +5,48 @@ import "./styles.css";
 const OUTPUT_WIDTH = 1280;
 const OUTPUT_HEIGHT = 1600;
 
-const SCENES = [
-  {
-    id: "museo-damaso-arce",
+const SPACES = {
+  "ciencias": {
+    id: "ciencias",
+    name: "Museo de las Ciencias",
+    postalTitle: "Yo visité el Museo de las Ciencias",
+    postalSubtitle: "Ciencia · Megafauna · Descubrimiento",
+    frame: "/assets/marcos/ciencias-photocall.png",
+    instruction: "Ubicate dentro del centro libre del marco.",
+  },
+  "damaso-arce": {
+    id: "damaso-arce",
     name: "Museo Dámaso Arce",
     postalTitle: "Yo visité el Museo Dámaso Arce",
     postalSubtitle: "Arte · Historia · Cultura",
-    lat: -36.8927,
-    lng: -60.3225,
-    radiusMeters: 500,
-    theme: "damaso",
     frame: "/assets/marcos/damaso-arce-photocall.png",
-    instruction:
-      "Ubicate dentro del centro libre, entre Belgrano y el pintor.",
+    instruction: "Ubicate entre Belgrano y el pintor.",
   },
-];
+  "centro-cultural": {
+    id: "centro-cultural",
+    name: "Centro Cultural",
+    postalTitle: "Yo visité el Centro Cultural",
+    postalSubtitle: "Arte · Comunidad · Encuentro",
+    frame: "/assets/marcos/centro-cultural-photocall.png",
+    instruction: "Ubicate dentro del centro libre del marco.",
+  },
+  "emiliozzi": {
+    id: "emiliozzi",
+    name: "Museo Hermanos Emiliozzi",
+    postalTitle: "Yo visité el Museo Hermanos Emiliozzi",
+    postalSubtitle: "Automovilismo · Historia · Olavarría",
+    frame: "/assets/marcos/emiliozzi-photocall.png",
+    instruction: "Ubicate en el centro como protagonista de boxes.",
+  },
+  "loma-negra": {
+    id: "loma-negra",
+    name: "Museo de Loma Negra",
+    postalTitle: "Yo visité el Museo de Loma Negra",
+    postalSubtitle: "Industria · Identidad · Comunidad",
+    frame: "/assets/marcos/loma-negra-photocall.png",
+    instruction: "Ubicate dentro del centro libre del marco.",
+  },
+};
 
 function App() {
   const videoRef = useRef(null);
@@ -33,9 +60,7 @@ function App() {
   const [error, setError] = useState("");
   const [isCapturing, setIsCapturing] = useState(false);
 
-  const [currentScene, setCurrentScene] = useState(null);
-  const [locationStatus, setLocationStatus] = useState("pending");
-
+  const [currentSpace, setCurrentSpace] = useState(null);
   const [peopleCount, setPeopleCount] = useState(1);
 
   const [guides, setGuides] = useState([
@@ -60,7 +85,7 @@ function App() {
   const isCameraScreen = status === "starting" || status === "camera";
 
   useEffect(() => {
-    detectLocation();
+    loadSpaceFromUrl();
   }, []);
 
   useEffect(() => {
@@ -83,103 +108,34 @@ function App() {
     };
   }, [stream]);
 
-  function detectLocation() {
-    setError("");
-    setLocationStatus("detecting");
+  function loadSpaceFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const spaceId = params.get("space");
 
-    if (!navigator.geolocation) {
-      setLocationStatus("error");
-      setError("Este navegador no permite detectar ubicación.");
+    if (spaceId && SPACES[spaceId]) {
+      setCurrentSpace(SPACES[spaceId]);
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const userLat = position.coords.latitude;
-        const userLng = position.coords.longitude;
-        const nearestScene = findNearestScene(userLat, userLng);
-
-        if (nearestScene) {
-          setCurrentScene(nearestScene);
-          setLocationStatus("detected");
-        } else {
-          setLocationStatus("not-found");
-          setError("No encontramos una postal activa cerca de tu ubicación.");
-        }
-      },
-      (err) => {
-        console.error(err);
-        setLocationStatus("error");
-        setError(
-          "No se pudo detectar la ubicación. Activá el permiso de ubicación."
-        );
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
-    );
+    setCurrentSpace(null);
   }
 
-  function findNearestScene(userLat, userLng) {
-    let nearest = null;
-    let nearestDistance = Infinity;
+  function selectSpace(spaceId) {
+    if (!SPACES[spaceId]) return;
 
-    for (const scene of SCENES) {
-      const distance = getDistanceInMeters(
-        userLat,
-        userLng,
-        scene.lat,
-        scene.lng
-      );
+    const url = new URL(window.location.href);
+    url.searchParams.set("space", spaceId);
+    window.history.replaceState({}, "", url.toString());
 
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearest = scene;
-      }
-    }
-
-    if (nearest && nearestDistance <= nearest.radiusMeters) {
-      return {
-        ...nearest,
-        distance: Math.round(nearestDistance),
-      };
-    }
-
-    return null;
-  }
-
-  function getDistanceInMeters(lat1, lng1, lat2, lng2) {
-    const earthRadius = 6371000;
-    const dLat = toRadians(lat2 - lat1);
-    const dLng = toRadians(lng2 - lng1);
-
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRadians(lat1)) *
-        Math.cos(toRadians(lat2)) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return earthRadius * c;
-  }
-
-  function toRadians(value) {
-    return (value * Math.PI) / 180;
-  }
-
-  function useDemoScene() {
-    setCurrentScene(SCENES[0]);
-    setLocationStatus("detected");
+    setCurrentSpace(SPACES[spaceId]);
+    setFinalImage(null);
+    setStatus("idle");
     setError("");
   }
 
   async function startCamera() {
-    if (!currentScene) {
-      setError("Primero hay que detectar una postal activa cerca.");
+    if (!currentSpace) {
+      setError("Primero seleccioná un espacio o escaneá el QR del lugar.");
       return;
     }
 
@@ -297,7 +253,7 @@ function App() {
   }
 
   function capturePhoto() {
-    if (isCapturing || !currentScene) return;
+    if (isCapturing || !currentSpace) return;
 
     setIsCapturing(true);
 
@@ -335,15 +291,12 @@ function App() {
     canvas.height = OUTPUT_HEIGHT;
 
     try {
-      const scene = currentScene;
       const photo = await loadImage(capturedImage);
-      const frame = await loadImage(scene.frame);
+      const frame = await loadImage(currentSpace.frame);
 
       drawPhotoInsideCenter(ctx, photo, OUTPUT_WIDTH, OUTPUT_HEIGHT);
       drawCenterLightWash(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
       ctx.drawImage(frame, 0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
-
-      drawSubtleFloorShadow(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
       drawSoftVignette(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
       const result = canvas.toDataURL("image/png");
@@ -352,19 +305,13 @@ function App() {
     } catch (err) {
       console.error(err);
       setError(
-        "No se pudo crear la postal. Revisá que exista public/assets/marcos/damaso-arce-photocall.png"
+        `No se pudo crear la postal. Revisá que exista el archivo: ${currentSpace.frame}`
       );
       setStatus("camera");
     }
   }
 
   function drawPhotoInsideCenter(ctx, img, width, height) {
-    /*
-      Zona aproximada del centro libre del PNG.
-      La foto se dibuja detrás de todo, pero encajada
-      para que la persona quede en el hueco central.
-    */
-
     const target = {
       x: width * 0.18,
       y: height * 0.23,
@@ -383,29 +330,8 @@ function App() {
     const w = width * 0.64;
     const h = height * 0.67;
 
-    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.fillStyle = "rgba(255,255,255,0.04)";
     ctx.fillRect(x, y, w, h);
-
-    ctx.restore();
-  }
-
-  function drawSubtleFloorShadow(ctx, width, height) {
-    ctx.save();
-
-    const gradient = ctx.createRadialGradient(
-      width * 0.5,
-      height * 0.88,
-      width * 0.05,
-      width * 0.5,
-      height * 0.88,
-      width * 0.36
-    );
-
-    gradient.addColorStop(0, "rgba(0,0,0,0.14)");
-    gradient.addColorStop(1, "rgba(0,0,0,0)");
-
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
 
     ctx.restore();
   }
@@ -423,7 +349,7 @@ function App() {
     );
 
     gradient.addColorStop(0, "rgba(0,0,0,0)");
-    gradient.addColorStop(1, "rgba(0,0,0,0.10)");
+    gradient.addColorStop(1, "rgba(0,0,0,0.08)");
 
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
@@ -478,29 +404,29 @@ function App() {
   }
 
   function downloadPostal() {
-    if (!finalImage) return;
+    if (!finalImage || !currentSpace) return;
 
     const link = document.createElement("a");
     link.href = finalImage;
-    link.download = "postal-damaso-arce.png";
+    link.download = `postal-${currentSpace.id}.png`;
     link.click();
   }
 
   async function sharePostal() {
-    if (!finalImage) return;
+    if (!finalImage || !currentSpace) return;
 
     try {
       const response = await fetch(finalImage);
       const blob = await response.blob();
 
-      const file = new File([blob], "postal-damaso-arce.png", {
+      const file = new File([blob], `postal-${currentSpace.id}.png`, {
         type: "image/png",
       });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
-          title: "Museo Dámaso Arce",
-          text: "Yo visité el Museo Dámaso Arce",
+          title: currentSpace.name,
+          text: currentSpace.postalTitle,
           files: [file],
         });
       } else {
@@ -536,24 +462,38 @@ function App() {
 
               <h1>Postal Viva</h1>
 
-              {locationStatus === "detecting" && (
+              {!currentSpace && (
                 <>
-                  <h2>Buscando tu lugar…</h2>
+                  <h2>Elegí un espacio</h2>
                   <p>
-                    Permití la ubicación para cargar la postal correspondiente.
+                    Escaneá el QR del lugar o seleccioná una experiencia de
+                    prueba.
                   </p>
+
+                  <div className="spaceGrid">
+                    {Object.values(SPACES).map((space) => (
+                      <button
+                        key={space.id}
+                        className="spaceButton"
+                        onClick={() => selectSpace(space.id)}
+                      >
+                        <strong>{space.name}</strong>
+                        <span>{space.postalSubtitle}</span>
+                      </button>
+                    ))}
+                  </div>
                 </>
               )}
 
-              {locationStatus === "detected" && currentScene && (
+              {currentSpace && (
                 <>
-                  <h2>{currentScene.name}</h2>
+                  <h2>{currentSpace.name}</h2>
                   <p>
-                    Escena: <strong>{currentScene.postalTitle}</strong>
+                    Escena: <strong>{currentSpace.postalTitle}</strong>
                   </p>
 
                   <div className="sceneInstruction">
-                    {currentScene.instruction}
+                    {currentSpace.instruction}
                   </div>
 
                   <div className="peopleSelector">
@@ -576,35 +516,17 @@ function App() {
                     <span>📷</span>
                     Activar cámara
                   </button>
-                </>
-              )}
 
-              {locationStatus === "not-found" && (
-                <>
-                  <h2>Sin postal cercana</h2>
-                  <p>No encontramos una experiencia activa en esta ubicación.</p>
-
-                  <button className="startButton" onClick={detectLocation}>
-                    Reintentar ubicación
-                  </button>
-
-                  <button className="demoButton" onClick={useDemoScene}>
-                    Usar demo Museo Dámaso Arce
-                  </button>
-                </>
-              )}
-
-              {locationStatus === "error" && (
-                <>
-                  <h2>Ubicación desactivada</h2>
-                  <p>Activá el permiso de ubicación para detectar el museo.</p>
-
-                  <button className="startButton" onClick={detectLocation}>
-                    Reintentar ubicación
-                  </button>
-
-                  <button className="demoButton" onClick={useDemoScene}>
-                    Usar demo Museo Dámaso Arce
+                  <button
+                    className="demoButton"
+                    onClick={() => {
+                      const url = new URL(window.location.href);
+                      url.searchParams.delete("space");
+                      window.history.replaceState({}, "", url.toString());
+                      setCurrentSpace(null);
+                    }}
+                  >
+                    Cambiar espacio
                   </button>
                 </>
               )}
@@ -613,14 +535,14 @@ function App() {
             </div>
           )}
 
-          {(status === "starting" || status === "camera") && currentScene && (
+          {(status === "starting" || status === "camera") && currentSpace && (
             <div className="cameraBox" ref={cameraBoxRef}>
               <video ref={videoRef} autoPlay playsInline muted />
 
               <div className="cameraTopBar">
                 <div>
-                  <span className="placeLabel">{currentScene.name}</span>
-                  <strong>{currentScene.instruction}</strong>
+                  <span className="placeLabel">{currentSpace.name}</span>
+                  <strong>{currentSpace.instruction}</strong>
                 </div>
               </div>
 
@@ -665,7 +587,7 @@ function App() {
             <div className="processing">
               <div className="spinner"></div>
               <h2>Creando postal…</h2>
-              <p>Combinando tu foto con el marco del museo.</p>
+              <p>Combinando tu foto con el marco del espacio.</p>
             </div>
           )}
 
@@ -680,30 +602,34 @@ function App() {
           <div>
             <p className="tag">Postal temática</p>
 
-            <h2>Photocall Museo Dámaso Arce V1</h2>
+            <h2>
+              {currentSpace
+                ? currentSpace.name
+                : "Experiencias disponibles"}
+            </h2>
 
-            {currentScene ? (
+            {currentSpace ? (
               <div className="detectedCard">
                 <span className="pin yellow"></span>
                 <div>
-                  <strong>{currentScene.name}</strong>
-                  <small>{currentScene.postalTitle}</small>
-                  <small>{currentScene.instruction}</small>
+                  <strong>{currentSpace.name}</strong>
+                  <small>{currentSpace.postalTitle}</small>
+                  <small>{currentSpace.instruction}</small>
                 </div>
               </div>
             ) : (
               <div className="detectedCard">
                 <span className="pin blue"></span>
                 <div>
-                  <strong>Detectando ubicación</strong>
-                  <small>Esperando una postal activa.</small>
+                  <strong>Sin espacio seleccionado</strong>
+                  <small>Usá el QR del lugar o elegí una experiencia.</small>
                 </div>
               </div>
             )}
 
             <p>
-              Esta versión usa un marco PNG transparente. La foto real queda por
-              detrás y el visitante se ubica dentro del centro libre.
+              Cada QR carga un marco PNG transparente diferente y ubica la foto
+              real en el centro del photocall.
             </p>
           </div>
 
@@ -724,7 +650,7 @@ function App() {
               </>
             )}
 
-            {status !== "idle" && status !== "result" && (
+            {status !== "idle" && status !== "result" && currentSpace && (
               <button className="secondary full" onClick={reset}>
                 Reiniciar
               </button>

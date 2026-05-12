@@ -12,6 +12,12 @@ function App() {
   const [error, setError] = useState("");
   const [isCapturing, setIsCapturing] = useState(false);
 
+  // encuadre editable
+  const [guideX, setGuideX] = useState(50);
+  const [guideY, setGuideY] = useState(50);
+  const [guideW, setGuideW] = useState(34);
+  const [guideH, setGuideH] = useState(70);
+
   useEffect(() => {
     return () => {
       if (stream) {
@@ -50,6 +56,23 @@ function App() {
     }
   }
 
+  function moveGuide(dx, dy) {
+    setGuideX((prev) => clamp(prev + dx, 15, 85));
+    setGuideY((prev) => clamp(prev + dy, 22, 78));
+  }
+
+  function resizeGuide(dw, dh) {
+    setGuideW((prev) => clamp(prev + dw, 20, 60));
+    setGuideH((prev) => clamp(prev + dh, 38, 86));
+  }
+
+  function resetGuide() {
+    setGuideX(50);
+    setGuideY(50);
+    setGuideW(34);
+    setGuideH(70);
+  }
+
   function capturePhoto() {
     if (isCapturing) return;
 
@@ -68,7 +91,6 @@ function App() {
       canvas.height = height;
 
       const ctx = canvas.getContext("2d");
-
       ctx.drawImage(video, 0, 0, width, height);
 
       const capturedImage = canvas.toDataURL("image/jpeg", 0.92);
@@ -78,8 +100,8 @@ function App() {
 
       setTimeout(() => {
         createPostal(capturedImage, width, height);
-      }, 500);
-    }, 220);
+      }, 450);
+    }, 180);
   }
 
   async function createPostal(capturedImage, width, height) {
@@ -92,14 +114,14 @@ function App() {
     try {
       const base = await loadImage(capturedImage);
 
-      // Foto original
+      // Foto base
       ctx.drawImage(base, 0, 0, width, height);
 
-      // Tono cálido suave
+      // Tono suave
       ctx.fillStyle = "rgba(255, 196, 0, 0.08)";
       ctx.fillRect(0, 0, width, height);
 
-      // Gliptodonte sin fondo claro
+      // Gliptodonte más grande
       const gliptodonte = await loadImageWithoutLightBackground(
         "/assets/personajes/gliptodonte.png"
       );
@@ -107,10 +129,10 @@ function App() {
       drawPng(
         ctx,
         gliptodonte,
-        width * 0.04,
-        height * 0.50,
-        width * 0.34,
-        height * 0.30
+        width * 0.01,
+        height * 0.42,
+        width * 0.46,
+        height * 0.42
       );
 
       drawSoftColorWaves(ctx, width, height);
@@ -119,7 +141,6 @@ function App() {
       drawText(ctx, width, height);
 
       const result = canvas.toDataURL("image/png");
-
       setFinalImage(result);
       setStatus("result");
     } catch (err) {
@@ -131,15 +152,17 @@ function App() {
     }
   }
 
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
   function loadImage(src) {
     return new Promise((resolve, reject) => {
       const img = new Image();
 
       img.onload = () => resolve(img);
-
-      img.onerror = () => {
+      img.onerror = () =>
         reject(new Error("No se pudo cargar la imagen: " + src));
-      };
 
       img.src = src;
     });
@@ -187,7 +210,6 @@ function App() {
         tempCtx.putImageData(imageData, 0, 0);
 
         const cleanedImg = new Image();
-
         cleanedImg.onload = () => resolve(cleanedImg);
         cleanedImg.onerror = reject;
         cleanedImg.src = tempCanvas.toDataURL("image/png");
@@ -202,20 +224,16 @@ function App() {
 
   function drawPng(ctx, img, x, y, w, h) {
     ctx.save();
-
     ctx.shadowColor = "rgba(0,0,0,0.45)";
     ctx.shadowBlur = 18;
     ctx.shadowOffsetX = 8;
     ctx.shadowOffsetY = 10;
-
     ctx.drawImage(img, x, y, w, h);
-
     ctx.restore();
   }
 
   function drawSoftColorWaves(ctx, width, height) {
     ctx.save();
-
     ctx.globalAlpha = 0.18;
 
     ctx.fillStyle = "#FFD21F";
@@ -281,7 +299,6 @@ function App() {
     const border = Math.max(20, width * 0.026);
 
     ctx.save();
-
     ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
     ctx.lineWidth = border;
     ctx.strokeRect(border / 2, border / 2, width - border, height - border);
@@ -289,7 +306,6 @@ function App() {
     ctx.strokeStyle = "rgba(255, 210, 31, 0.85)";
     ctx.lineWidth = 6;
     ctx.strokeRect(border, border, width - border * 2, height - border * 2);
-
     ctx.restore();
   }
 
@@ -351,6 +367,13 @@ function App() {
     setStatus(stream ? "camera" : "idle");
   }
 
+  const safePersonStyle = {
+    left: `${guideX}%`,
+    top: `${guideY}%`,
+    width: `${guideW}%`,
+    height: `${guideH}%`,
+  };
+
   return (
     <main className="app">
       <section className="layout">
@@ -366,7 +389,6 @@ function App() {
               </div>
 
               <h1>Postal Viva</h1>
-
               <h2>Elegí tu lugar y sacá tu foto</h2>
 
               <p>
@@ -395,7 +417,7 @@ function App() {
               </div>
 
               <div className="overlay">
-                <div className="safePerson"></div>
+                <div className="safePerson" style={safePersonStyle}></div>
 
                 <div className="leftZone">
                   <span>Gliptodonte</span>
@@ -403,7 +425,65 @@ function App() {
 
                 <div className="instructions">
                   <strong>Ubicá a la persona dentro de la guía</strong>
-                  <span>El personaje aparecerá en el lateral.</span>
+                  <span>Podés mover y agrandar el encuadre.</span>
+                </div>
+
+                <div className="guideControls">
+                  <div className="guideControlsTitle">Encuadre</div>
+
+                  <div className="guideRow">
+                    <button
+                      className="guideBtn"
+                      onClick={() => moveGuide(0, -3)}
+                    >
+                      ↑
+                    </button>
+                  </div>
+
+                  <div className="guideRow">
+                    <button
+                      className="guideBtn"
+                      onClick={() => moveGuide(-3, 0)}
+                    >
+                      ←
+                    </button>
+                    <button
+                      className="guideBtn"
+                      onClick={() => moveGuide(3, 0)}
+                    >
+                      →
+                    </button>
+                  </div>
+
+                  <div className="guideRow">
+                    <button
+                      className="guideBtn"
+                      onClick={() => moveGuide(0, 3)}
+                    >
+                      ↓
+                    </button>
+                  </div>
+
+                  <div className="guideRow sizeRow">
+                    <button
+                      className="guideBtn sizeBtn"
+                      onClick={() => resizeGuide(-3, -4)}
+                    >
+                      −
+                    </button>
+                    <button
+                      className="guideBtn sizeBtn"
+                      onClick={() => resizeGuide(3, 4)}
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div className="guideRow">
+                    <button className="guideResetBtn" onClick={resetGuide}>
+                      Reset
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -439,8 +519,8 @@ function App() {
             <h2>Postal por lugar</h2>
 
             <p>
-              Ahora trabajamos con estética colorida y botón de cámara flotante.
-              En el próximo paso agregamos selección automática por ubicación.
+              Ahora el gliptodonte es más grande y el encuadre se puede mover y
+              cambiar de tamaño.
             </p>
 
             <div className="placeCard active">

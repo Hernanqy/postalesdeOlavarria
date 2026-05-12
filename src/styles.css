@@ -645,3 +645,42 @@ video {
     height: 52px;
   }
 }
+
+.cameraMode {
+  padding: 0;
+  display: block;
+  background: black;
+}
+
+.cameraMode .layout {
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+  display: block;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.cameraMode .preview {
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+}
+
+.cameraMode .panel {
+  display: none;
+}
+
+.cameraMode .cameraBox {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+}
+
+.cameraMode video {
+  width: 100vw;
+  height: 100dvh;
+  object-fit: cover;
+}

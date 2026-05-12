@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import { SelfieSegmentation } from "@mediapipe/selfie_segmentation";
 import "./styles.css";
 
+const OUTPUT_WIDTH = 1280;
+const OUTPUT_HEIGHT = 720;
+
 const SCENES = [
   {
     id: "museo-ciencias",
@@ -50,20 +53,22 @@ function App() {
     {
       id: "person-1",
       label: "Persona 1",
-      x: 50,
-      y: 50,
+      x: 62,
+      y: 54,
       w: 34,
-      h: 70,
+      h: 74,
     },
     {
       id: "person-2",
       label: "Persona 2",
-      x: 68,
-      y: 50,
+      x: 72,
+      y: 54,
       w: 30,
-      h: 68,
+      h: 70,
     },
   ]);
+
+  const isCameraScreen = status === "starting" || status === "camera";
 
   useEffect(() => {
     detectLocation();
@@ -241,18 +246,18 @@ function App() {
         {
           id: "person-1",
           label: "Persona 1",
-          x: 50,
-          y: 50,
-          w: 36,
-          h: 72,
+          x: 62,
+          y: 54,
+          w: 34,
+          h: 74,
         },
         {
           id: "person-2",
           label: "Persona 2",
-          x: 68,
-          y: 50,
+          x: 72,
+          y: 54,
           w: 30,
-          h: 68,
+          h: 70,
         },
       ]);
     }
@@ -262,18 +267,18 @@ function App() {
         {
           id: "person-1",
           label: "Persona 1",
-          x: 38,
-          y: 50,
+          x: 46,
+          y: 54,
           w: 30,
-          h: 68,
+          h: 70,
         },
         {
           id: "person-2",
           label: "Persona 2",
-          x: 64,
-          y: 50,
+          x: 72,
+          y: 54,
           w: 30,
-          h: 68,
+          h: 70,
         },
       ]);
     }
@@ -327,14 +332,14 @@ function App() {
 
       if (!video || !canvas) return;
 
-      const width = video.videoWidth || 1280;
-      const height = video.videoHeight || 720;
+      const sourceWidth = video.videoWidth || 1280;
+      const sourceHeight = video.videoHeight || 720;
 
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = sourceWidth;
+      canvas.height = sourceHeight;
 
       const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, width, height);
+      ctx.drawImage(video, 0, 0, sourceWidth, sourceHeight);
 
       const capturedImage = canvas.toDataURL("image/jpeg", 0.95);
 
@@ -342,33 +347,48 @@ function App() {
       setIsCapturing(false);
 
       setTimeout(() => {
-        createPostal(capturedImage, width, height);
+        createPostal(capturedImage, sourceWidth, sourceHeight);
       }, 250);
     }, 160);
   }
 
-  async function createPostal(capturedImage, width, height) {
+  async function createPostal(capturedImage, sourceWidth, sourceHeight) {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = OUTPUT_WIDTH;
+    canvas.height = OUTPUT_HEIGHT;
 
     try {
       const scene = currentScene;
 
-      await drawThemeBackground(ctx, width, height, scene);
+      await drawThemeBackground(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, scene);
 
       const cutoutCanvas = await segmentPeopleFromImage(
         capturedImage,
-        width,
-        height
+        sourceWidth,
+        sourceHeight
       );
 
-      drawPeopleCutout(ctx, cutoutCanvas, width, height);
-      drawGroundShadow(ctx, width, height);
-      drawPostalFrame(ctx, width, height);
-      drawSceneText(ctx, width, height, scene.postalTitle, scene.postalSubtitle);
+      drawSelectedPeopleCutouts(
+        ctx,
+        cutoutCanvas,
+        sourceWidth,
+        sourceHeight,
+        OUTPUT_WIDTH,
+        OUTPUT_HEIGHT
+      );
+
+      drawGroundShadows(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+      drawVignette(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+      drawPostalFrame(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+      drawSceneText(
+        ctx,
+        OUTPUT_WIDTH,
+        OUTPUT_HEIGHT,
+        scene.postalTitle,
+        scene.postalSubtitle
+      );
 
       const result = canvas.toDataURL("image/png");
       setFinalImage(result);
@@ -380,7 +400,7 @@ function App() {
     }
   }
 
-  async function segmentPeopleFromImage(imageSrc, width, height) {
+  async function segmentPeopleFromImage(imageSrc, sourceWidth, sourceHeight) {
     if (!segmenterRef.current) {
       throw new Error("La segmentación todavía no está lista.");
     }
@@ -392,16 +412,57 @@ function App() {
       const cutoutCanvas = document.createElement("canvas");
       const cutoutCtx = cutoutCanvas.getContext("2d");
 
-      cutoutCanvas.width = width;
-      cutoutCanvas.height = height;
+      cutoutCanvas.width = sourceWidth;
+      cutoutCanvas.height = sourceHeight;
 
       segmenter.onResults((results) => {
         try {
-          cutoutCtx.clearRect(0, 0, width, height);
+          cutoutCtx.clearRect(0, 0, sourceWidth, sourceHeight);
 
-          cutoutCtx.drawImage(results.segmentationMask, 0, 0, width, height);
+          const maskCanvas = document.createElement("canvas");
+          const maskCtx = maskCanvas.getContext("2d");
+
+          maskCanvas.width = sourceWidth;
+          maskCanvas.height = sourceHeight;
+
+          maskCtx.drawImage(
+            results.segmentationMask,
+            0,
+            0,
+            sourceWidth,
+            sourceHeight
+          );
+
+          const maskData = maskCtx.getImageData(
+            0,
+            0,
+            sourceWidth,
+            sourceHeight
+          );
+
+          const data = maskData.data;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const value = data[i];
+
+            if (value > 120) {
+              data[i] = 255;
+              data[i + 1] = 255;
+              data[i + 2] = 255;
+              data[i + 3] = 255;
+            } else {
+              data[i] = 0;
+              data[i + 1] = 0;
+              data[i + 2] = 0;
+              data[i + 3] = 0;
+            }
+          }
+
+          maskCtx.putImageData(maskData, 0, 0);
+
+          cutoutCtx.drawImage(maskCanvas, 0, 0, sourceWidth, sourceHeight);
           cutoutCtx.globalCompositeOperation = "source-in";
-          cutoutCtx.drawImage(results.image, 0, 0, width, height);
+          cutoutCtx.drawImage(results.image, 0, 0, sourceWidth, sourceHeight);
           cutoutCtx.globalCompositeOperation = "source-over";
 
           resolve(cutoutCanvas);
@@ -430,32 +491,120 @@ function App() {
     }
   }
 
-  function drawPeopleCutout(ctx, cutoutCanvas, width, height) {
+  function drawSelectedPeopleCutouts(
+    ctx,
+    cutoutCanvas,
+    sourceWidth,
+    sourceHeight,
+    outputWidth,
+    outputHeight
+  ) {
+    const activeGuides = guides.slice(0, peopleCount);
+
+    activeGuides.forEach((guide) => {
+      const sourceRect = guideToSourceRect(guide, sourceWidth, sourceHeight);
+      const outputRect = guideToOutputRect(guide, outputWidth, outputHeight);
+
+      ctx.save();
+
+      ctx.shadowColor = "rgba(0,0,0,0.42)";
+      ctx.shadowBlur = 22;
+      ctx.shadowOffsetX = 8;
+      ctx.shadowOffsetY = 14;
+
+      ctx.drawImage(
+        cutoutCanvas,
+        sourceRect.x,
+        sourceRect.y,
+        sourceRect.w,
+        sourceRect.h,
+        outputRect.x,
+        outputRect.y,
+        outputRect.w,
+        outputRect.h
+      );
+
+      ctx.restore();
+    });
+  }
+
+  function guideToSourceRect(guide, sourceWidth, sourceHeight) {
+    const padding = 1.18;
+
+    const w = sourceWidth * (guide.w / 100) * padding;
+    const h = sourceHeight * (guide.h / 100) * padding;
+
+    const centerX = sourceWidth * (guide.x / 100);
+    const centerY = sourceHeight * (guide.y / 100);
+
+    return {
+      x: clamp(centerX - w / 2, 0, sourceWidth - w),
+      y: clamp(centerY - h / 2, 0, sourceHeight - h),
+      w: clamp(w, 10, sourceWidth),
+      h: clamp(h, 10, sourceHeight),
+    };
+  }
+
+  function guideToOutputRect(guide, outputWidth, outputHeight) {
+    const scale = peopleCount === 1 ? 0.86 : 0.76;
+
+    const h = outputHeight * scale;
+    const w = h * 0.45;
+
+    const x = outputWidth * (guide.x / 100) - w / 2;
+    const y = outputHeight * 0.18;
+
+    return {
+      x,
+      y,
+      w,
+      h,
+    };
+  }
+
+  function drawGroundShadows(ctx, width, height) {
+    const activeGuides = guides.slice(0, peopleCount);
+
     ctx.save();
-    ctx.globalAlpha = 1;
-    ctx.drawImage(cutoutCanvas, 0, 0, width, height);
+
+    activeGuides.forEach((guide) => {
+      const x = width * (guide.x / 100);
+      const y = height * 0.82;
+
+      const gradient = ctx.createRadialGradient(
+        x,
+        y,
+        width * 0.02,
+        x,
+        y,
+        width * 0.14
+      );
+
+      gradient.addColorStop(0, "rgba(0,0,0,0.22)");
+      gradient.addColorStop(1, "rgba(0,0,0,0)");
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+    });
+
     ctx.restore();
   }
 
-  function drawGroundShadow(ctx, width, height) {
-    ctx.save();
-
+  function drawVignette(ctx, width, height) {
     const gradient = ctx.createRadialGradient(
-      width * 0.5,
-      height * 0.85,
-      width * 0.05,
-      width * 0.5,
-      height * 0.85,
-      width * 0.34
+      width / 2,
+      height / 2,
+      height * 0.12,
+      width / 2,
+      height / 2,
+      height * 0.8
     );
 
-    gradient.addColorStop(0, "rgba(0,0,0,0.18)");
-    gradient.addColorStop(1, "rgba(0,0,0,0)");
+    gradient.addColorStop(0, "rgba(0,0,0,0)");
+    gradient.addColorStop(1, "rgba(0,0,0,0.24)");
 
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
-
-    ctx.restore();
   }
 
   function drawFallbackMegafaunaBackground(ctx, width, height) {
@@ -485,9 +634,12 @@ function App() {
   function loadImage(src) {
     return new Promise((resolve, reject) => {
       const img = new Image();
+
       img.onload = () => resolve(img);
+
       img.onerror = () =>
         reject(new Error("No se pudo cargar la imagen: " + src));
+
       img.src = src;
     });
   }
@@ -520,13 +672,15 @@ function App() {
     const border = Math.max(20, width * 0.026);
 
     ctx.save();
+
     ctx.strokeStyle = "rgba(255,255,255,0.95)";
     ctx.lineWidth = border;
     ctx.strokeRect(border / 2, border / 2, width - border, height - border);
 
-    ctx.strokeStyle = "rgba(255,210,31,0.9)";
+    ctx.strokeStyle = "rgba(255,210,31,0.92)";
     ctx.lineWidth = 6;
     ctx.strokeRect(border, border, width - border * 2, height - border * 2);
+
     ctx.restore();
   }
 
@@ -591,7 +745,7 @@ function App() {
   const activeGuides = guides.slice(0, peopleCount);
 
   return (
-    <main className="app">
+    <main className={`app ${isCameraScreen ? "cameraMode" : ""}`}>
       <section className="layout">
         <div className="preview">
           {status === "idle" && (
@@ -609,7 +763,9 @@ function App() {
               {locationStatus === "detecting" && (
                 <>
                   <h2>Buscando tu lugar…</h2>
-                  <p>Permití la ubicación para cargar la postal correspondiente.</p>
+                  <p>
+                    Permití la ubicación para cargar la postal correspondiente.
+                  </p>
                 </>
               )}
 

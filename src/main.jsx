@@ -9,24 +9,30 @@ const SCENES = [
   {
     id: "museo-ciencias",
     name: "Museo de Ciencias",
-    postalTitle: "Museo de Ciencias",
-    postalSubtitle: "Megafauna · Exploradores del pasado",
+    postalTitle: "Explorador de Megafauna",
+    postalSubtitle: "Olavarría · Descubrimiento prehistórico",
     lat: -36.8927,
     lng: -60.3225,
     radiusMeters: 400,
     theme: "megafauna",
+    instruction:
+      "Señalá hacia el gliptodonte como si lo hubieras descubierto.",
+    poseHint: "Persona mirando o señalando hacia un costado",
     mainObject: "/assets/personajes/gliptodonte.png",
   },
   {
     id: "museo-emiliozzi",
     name: "Museo Emiliozzi",
-    postalTitle: "Museo Emiliozzi",
-    postalSubtitle: "Automovilismo histórico",
+    postalTitle: "Jefe de Taller",
+    postalSubtitle: "Automovilismo histórico · Olavarría",
     lat: -36.8935,
     lng: -60.3215,
     radiusMeters: 400,
     theme: "emiliozzi",
-    mainObject: "/assets/personajes/gliptodonte.png",
+    instruction:
+      "Posá como jefe de taller, mirando hacia el auto de carrera.",
+    poseHint: "Persona de frente o mirando hacia un costado",
+    mainObject: null,
   },
 ];
 
@@ -51,7 +57,7 @@ function App() {
     {
       id: "person-1",
       label: "Persona 1",
-      x: 50,
+      x: 56,
       y: 52,
       w: 34,
       h: 72,
@@ -59,7 +65,7 @@ function App() {
     {
       id: "person-2",
       label: "Persona 2",
-      x: 70,
+      x: 72,
       y: 52,
       w: 30,
       h: 68,
@@ -161,7 +167,6 @@ function App() {
 
   function getDistanceInMeters(lat1, lng1, lat2, lng2) {
     const earthRadius = 6371000;
-
     const dLat = toRadians(lat2 - lat1);
     const dLng = toRadians(lng2 - lng1);
 
@@ -230,7 +235,7 @@ function App() {
         {
           id: "person-1",
           label: "Persona 1",
-          x: 50,
+          x: 56,
           y: 52,
           w: 34,
           h: 72,
@@ -238,7 +243,7 @@ function App() {
         {
           id: "person-2",
           label: "Persona 2",
-          x: 70,
+          x: 72,
           y: 52,
           w: 30,
           h: 68,
@@ -285,7 +290,6 @@ function App() {
 
   function moveGuideToPointer(event, guideId) {
     const cameraBox = cameraBoxRef.current;
-
     if (!cameraBox) return;
 
     const rect = cameraBox.getBoundingClientRect();
@@ -348,19 +352,18 @@ function App() {
       const scene = currentScene;
       const base = await loadImage(capturedImage);
 
-      drawWhiteStudioBase(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
-      drawPhotoCover(ctx, base, OUTPUT_WIDTH, OUTPUT_HEIGHT);
-      drawCleanFloor(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+      drawPhotoBase(ctx, base, OUTPUT_WIDTH, OUTPUT_HEIGHT, scene.theme);
 
-      const layout = calculateObjectLayout(OUTPUT_WIDTH, OUTPUT_HEIGHT);
+      const layout = calculateSceneLayout(OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
       if (scene.theme === "emiliozzi") {
-        await drawEmiliozziObjects(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, layout);
+        await drawEmiliozziScene(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, layout);
       } else {
-        await drawMegafaunaObjects(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, layout);
+        await drawMegafaunaScene(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, layout);
       }
 
-      drawAtmosphere(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, scene.theme);
+      drawInstructionBadge(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, scene);
+      drawColorGrade(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT, scene.theme);
       drawPostalFrame(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
       drawSceneText(
         ctx,
@@ -380,142 +383,199 @@ function App() {
     }
   }
 
-  function drawWhiteStudioBase(ctx, width, height) {
-    const bg = ctx.createLinearGradient(0, 0, 0, height);
-    bg.addColorStop(0, "#ffffff");
-    bg.addColorStop(0.58, "#ffffff");
-    bg.addColorStop(0.59, "#f1eee8");
-    bg.addColorStop(1, "#ded7cc");
-
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, width, height);
-  }
-
-  function drawPhotoCover(ctx, img, width, height) {
+  function drawPhotoBase(ctx, img, width, height, theme) {
     ctx.save();
 
     drawCoverImage(ctx, img, width, height);
 
-    // Suaviza la foto para que funcione como postal sobre fondo blanco.
-    ctx.fillStyle = "rgba(255,255,255,0.10)";
-    ctx.fillRect(0, 0, width, height);
+    if (theme === "emiliozzi") {
+      ctx.filter = "grayscale(0.75) contrast(1.05)";
+      drawCoverImage(ctx, img, width, height);
+      ctx.filter = "none";
+      ctx.fillStyle = "rgba(70, 55, 42, 0.18)";
+      ctx.fillRect(0, 0, width, height);
+    } else {
+      ctx.fillStyle = "rgba(255, 235, 190, 0.10)";
+      ctx.fillRect(0, 0, width, height);
+    }
 
     ctx.restore();
   }
 
-  function drawCleanFloor(ctx, width, height) {
-    ctx.save();
-
-    const floorY = height * 0.68;
-
-    const floor = ctx.createLinearGradient(0, floorY, 0, height);
-    floor.addColorStop(0, "rgba(255,255,255,0.05)");
-    floor.addColorStop(1, "rgba(210,204,194,0.28)");
-
-    ctx.fillStyle = floor;
-    ctx.fillRect(0, floorY, width, height - floorY);
-
-    ctx.strokeStyle = "rgba(80,70,60,0.16)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(0, floorY);
-    ctx.lineTo(width, floorY);
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  function calculateObjectLayout(width, height) {
+  function calculateSceneLayout(width, height) {
     const activeGuides = guides.slice(0, peopleCount);
 
     const occupied = activeGuides.map((guide) => {
       const left = width * ((guide.x - guide.w / 2) / 100);
       const right = width * ((guide.x + guide.w / 2) / 100);
+      const top = height * ((guide.y - guide.h / 2) / 100);
+      const bottom = height * ((guide.y + guide.h / 2) / 100);
 
       return {
         left,
         right,
-        center: width * (guide.x / 100),
+        top,
+        bottom,
+        centerX: width * (guide.x / 100),
+        centerY: height * (guide.y / 100),
       };
     });
 
     const minLeft = Math.min(...occupied.map((item) => item.left));
     const maxRight = Math.max(...occupied.map((item) => item.right));
-    const center = (minLeft + maxRight) / 2;
 
     const leftSpace = minLeft;
     const rightSpace = width - maxRight;
 
-    const mainSide = leftSpace > rightSpace ? "left" : "right";
+    const objectSide = leftSpace > rightSpace ? "left" : "right";
 
-    const mainObject = {
-      side: mainSide,
-      x: mainSide === "left" ? width * 0.04 : width * 0.66,
-      y: height * 0.47,
+    const mainAnimal = {
+      side: objectSide,
+      x: objectSide === "left" ? width * 0.03 : width * 0.68,
+      y: height * 0.50,
       w: width * 0.30,
-      h: height * 0.32,
+      h: height * 0.30,
     };
 
-    const secondaryObject = {
-      side: mainSide === "left" ? "right" : "left",
-      x: mainSide === "left" ? width * 0.72 : width * 0.08,
-      y: height * 0.18,
-      w: width * 0.18,
-      h: height * 0.24,
+    const footprints = {
+      side: objectSide === "left" ? "right" : "left",
+      startX: objectSide === "left" ? width * 0.62 : width * 0.16,
+      startY: height * 0.70,
     };
 
-    const foregroundObject = {
-      x: center < width / 2 ? width * 0.70 : width * 0.08,
+    const foreground = {
+      x: objectSide === "left" ? width * 0.58 : width * 0.08,
       y: height * 0.76,
       w: width * 0.24,
-      h: height * 0.16,
+      h: height * 0.14,
+    };
+
+    const arrowTarget = {
+      x: mainAnimal.x + mainAnimal.w * 0.5,
+      y: mainAnimal.y + mainAnimal.h * 0.35,
+    };
+
+    const arrowStart = {
+      x: objectSide === "left" ? width * 0.52 : width * 0.48,
+      y: height * 0.38,
     };
 
     return {
       activeGuides,
-      mainObject,
-      secondaryObject,
-      foregroundObject,
       occupied,
+      objectSide,
+      mainAnimal,
+      footprints,
+      foreground,
+      arrowStart,
+      arrowTarget,
     };
   }
 
-  async function drawMegafaunaObjects(ctx, width, height, layout) {
-    ctx.save();
+  async function drawMegafaunaScene(ctx, width, height, layout) {
+    drawExpeditionNotebookOverlay(ctx, width, height);
+    drawFootprints(ctx, layout.footprints);
+    drawDiscoveryArrow(ctx, layout.arrowStart, layout.arrowTarget);
 
-    // Objeto principal: gliptodonte, si existe PNG.
     try {
       const gliptodonte = await loadImageWithoutLightBackground(
         "/assets/personajes/gliptodonte.png"
       );
 
-      drawObjectShadow(ctx, layout.mainObject);
+      drawObjectShadow(ctx, layout.mainAnimal);
       ctx.drawImage(
         gliptodonte,
-        layout.mainObject.x,
-        layout.mainObject.y,
-        layout.mainObject.w,
-        layout.mainObject.h
+        layout.mainAnimal.x,
+        layout.mainAnimal.y,
+        layout.mainAnimal.w,
+        layout.mainAnimal.h
       );
     } catch (err) {
-      drawFallbackGliptodonte(ctx, layout.mainObject);
+      drawFallbackGliptodonte(ctx, layout.mainAnimal);
     }
 
-    // Objeto secundario: sol / ave / señal gráfica.
-    drawSunBadge(ctx, layout.secondaryObject);
+    drawFossilForeground(ctx, layout.foreground);
+    drawStamp(ctx, width, height, "HALLAZGO");
+  }
 
-    // Objeto frontal: huesos / fósil en piso.
-    drawFossilForeground(ctx, layout.foregroundObject);
+  async function drawEmiliozziScene(ctx, width, height, layout) {
+    drawVintagePhotoTexture(ctx, width, height);
+    drawVintageCar(ctx, layout.mainAnimal);
+    drawWorkshopTools(ctx, layout.foreground);
+    drawStamp(ctx, width, height, "BOXES");
+  }
+
+  function drawExpeditionNotebookOverlay(ctx, width, height) {
+    ctx.save();
+
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.lineWidth = 2;
+
+    for (let i = 0; i < 8; i++) {
+      const y = height * (0.18 + i * 0.07);
+      ctx.beginPath();
+      ctx.moveTo(width * 0.06, y);
+      ctx.lineTo(width * 0.94, y);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "rgba(255,255,255,0.10)";
+    ctx.fillRect(width * 0.04, height * 0.08, width * 0.92, height * 0.78);
 
     ctx.restore();
   }
 
-  async function drawEmiliozziObjects(ctx, width, height, layout) {
+  function drawFootprints(ctx, footprints) {
     ctx.save();
 
-    drawVintageCar(ctx, layout.mainObject);
-    drawToolSign(ctx, layout.secondaryObject);
-    drawToolsForeground(ctx, layout.foregroundObject);
+    ctx.fillStyle = "rgba(70, 48, 30, 0.34)";
+
+    for (let i = 0; i < 5; i++) {
+      const x = footprints.startX + i * 52 * (footprints.side === "left" ? -1 : 1);
+      const y = footprints.startY + i * 26;
+      const rot = footprints.side === "left" ? -0.45 : 0.45;
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rot);
+
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 18, 34, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(-15, -24, 6, 0, Math.PI * 2);
+      ctx.arc(0, -29, 7, 0, Math.PI * 2);
+      ctx.arc(15, -24, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  function drawDiscoveryArrow(ctx, from, to) {
+    ctx.save();
+
+    ctx.strokeStyle = "rgba(255, 210, 31, 0.88)";
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.quadraticCurveTo((from.x + to.x) / 2, from.y - 80, to.x, to.y);
+    ctx.stroke();
+
+    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+
+    ctx.fillStyle = "rgba(255, 210, 31, 0.92)";
+    ctx.beginPath();
+    ctx.moveTo(to.x, to.y);
+    ctx.lineTo(to.x - 26 * Math.cos(angle - 0.5), to.y - 26 * Math.sin(angle - 0.5));
+    ctx.lineTo(to.x - 26 * Math.cos(angle + 0.5), to.y - 26 * Math.sin(angle + 0.5));
+    ctx.closePath();
+    ctx.fill();
 
     ctx.restore();
   }
@@ -524,23 +584,31 @@ function App() {
     ctx.save();
 
     const shadowX = rect.x + rect.w * 0.5;
-    const shadowY = rect.y + rect.h * 0.96;
+    const shadowY = rect.y + rect.h * 0.94;
 
     const gradient = ctx.createRadialGradient(
       shadowX,
       shadowY,
-      rect.w * 0.12,
+      rect.w * 0.08,
       shadowX,
       shadowY,
-      rect.w * 0.58
+      rect.w * 0.60
     );
 
-    gradient.addColorStop(0, "rgba(0,0,0,0.24)");
+    gradient.addColorStop(0, "rgba(0,0,0,0.28)");
     gradient.addColorStop(1, "rgba(0,0,0,0)");
 
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.ellipse(shadowX, shadowY, rect.w * 0.65, rect.h * 0.10, 0, 0, Math.PI * 2);
+    ctx.ellipse(
+      shadowX,
+      shadowY,
+      rect.w * 0.62,
+      rect.h * 0.10,
+      0,
+      0,
+      Math.PI * 2
+    );
     ctx.fill();
 
     ctx.restore();
@@ -580,27 +648,10 @@ function App() {
     ctx.restore();
   }
 
-  function drawSunBadge(ctx, rect) {
-    ctx.save();
-
-    ctx.fillStyle = "rgba(255, 210, 31, 0.84)";
-    ctx.beginPath();
-    ctx.arc(rect.x + rect.w * 0.5, rect.y + rect.h * 0.5, rect.w * 0.34, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "rgba(255,255,255,0.72)";
-    ctx.beginPath();
-    ctx.arc(rect.x + rect.w * 0.42, rect.y + rect.h * 0.44, rect.w * 0.07, 0, Math.PI * 2);
-    ctx.arc(rect.x + rect.w * 0.58, rect.y + rect.h * 0.44, rect.w * 0.07, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-  }
-
   function drawFossilForeground(ctx, rect) {
     ctx.save();
 
-    ctx.strokeStyle = "rgba(255,255,255,0.86)";
+    ctx.strokeStyle = "rgba(255,255,255,0.84)";
     ctx.lineWidth = 12;
     ctx.lineCap = "round";
 
@@ -609,11 +660,77 @@ function App() {
     ctx.lineTo(rect.x + rect.w * 0.9, rect.y + rect.h * 0.3);
     ctx.stroke();
 
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.beginPath();
     ctx.arc(rect.x + rect.w * 0.08, rect.y + rect.h * 0.5, rect.w * 0.08, 0, Math.PI * 2);
     ctx.arc(rect.x + rect.w * 0.92, rect.y + rect.h * 0.3, rect.w * 0.08, 0, Math.PI * 2);
     ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawStamp(ctx, width, height, text) {
+    ctx.save();
+
+    const x = width * 0.76;
+    const y = height * 0.16;
+    const w = width * 0.18;
+    const h = height * 0.10;
+
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate(-0.12);
+
+    ctx.strokeStyle = "rgba(245, 70, 120, 0.82)";
+    ctx.lineWidth = 6;
+    ctx.strokeRect(-w / 2, -h / 2, w, h);
+
+    ctx.fillStyle = "rgba(245, 70, 120, 0.88)";
+    ctx.textAlign = "center";
+    ctx.font = `bold ${Math.round(width * 0.026)}px Arial`;
+    ctx.fillText(text, 0, 10);
+
+    ctx.restore();
+  }
+
+  function drawInstructionBadge(ctx, width, height, scene) {
+    ctx.save();
+
+    const x = width * 0.06;
+    const y = height * 0.08;
+    const w = width * 0.42;
+    const h = height * 0.12;
+
+    ctx.fillStyle = "rgba(255,255,255,0.88)";
+    roundedRect(ctx, x, y, w, h, 26);
+    ctx.fill();
+
+    ctx.fillStyle = "#129be3";
+    ctx.font = `bold ${Math.round(width * 0.018)}px Arial`;
+    ctx.fillText("CONSIGNA", x + 28, y + 34);
+
+    ctx.fillStyle = "#3f3038";
+    ctx.font = `bold ${Math.round(width * 0.022)}px Arial`;
+    wrapText(ctx, scene.instruction, x + 28, y + 66, w - 56, 26);
+
+    ctx.restore();
+  }
+
+  function drawVintagePhotoTexture(ctx, width, height) {
+    ctx.save();
+
+    ctx.fillStyle = "rgba(40,34,30,0.18)";
+    ctx.fillRect(0, 0, width, height);
+
+    for (let i = 0; i < 80; i++) {
+      const x = randomFrom(i, 0, width);
+      const y = randomFrom(i + 12, 0, height);
+      const r = randomFrom(i + 5, 1, 3);
+
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.restore();
   }
@@ -624,18 +741,17 @@ function App() {
     drawObjectShadow(ctx, rect);
 
     ctx.fillStyle = "rgba(245,245,240,0.96)";
-    ctx.beginPath();
-    ctx.roundRect(rect.x, rect.y + rect.h * 0.28, rect.w, rect.h * 0.34, rect.w * 0.08);
+    roundedRect(ctx, rect.x, rect.y + rect.h * 0.28, rect.w, rect.h * 0.34, 26);
     ctx.fill();
 
     ctx.fillStyle = "rgba(230,230,225,0.96)";
-    ctx.beginPath();
-    ctx.roundRect(
+    roundedRect(
+      ctx,
       rect.x + rect.w * 0.22,
       rect.y + rect.h * 0.08,
       rect.w * 0.42,
       rect.h * 0.28,
-      rect.w * 0.09
+      22
     );
     ctx.fill();
 
@@ -653,32 +769,11 @@ function App() {
     ctx.restore();
   }
 
-  function drawToolSign(ctx, rect) {
-    ctx.save();
-
-    ctx.fillStyle = "rgba(63,48,56,0.86)";
-    ctx.beginPath();
-    ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 24);
-    ctx.fill();
-
-    ctx.strokeStyle = "rgba(255,255,255,0.78)";
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.moveTo(rect.x + rect.w * 0.25, rect.y + rect.h * 0.28);
-    ctx.lineTo(rect.x + rect.w * 0.75, rect.y + rect.h * 0.72);
-    ctx.moveTo(rect.x + rect.w * 0.75, rect.y + rect.h * 0.28);
-    ctx.lineTo(rect.x + rect.w * 0.25, rect.y + rect.h * 0.72);
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  function drawToolsForeground(ctx, rect) {
+  function drawWorkshopTools(ctx, rect) {
     ctx.save();
 
     ctx.fillStyle = "rgba(63,48,56,0.70)";
-    ctx.beginPath();
-    ctx.roundRect(rect.x, rect.y + rect.h * 0.42, rect.w, rect.h * 0.18, 18);
+    roundedRect(ctx, rect.x, rect.y + rect.h * 0.42, rect.w, rect.h * 0.18, 18);
     ctx.fill();
 
     ctx.strokeStyle = "rgba(63,48,56,0.70)";
@@ -693,7 +788,7 @@ function App() {
     ctx.restore();
   }
 
-  function drawAtmosphere(ctx, width, height, theme) {
+  function drawColorGrade(ctx, width, height, theme) {
     ctx.save();
 
     if (theme === "emiliozzi") {
@@ -702,6 +797,21 @@ function App() {
       ctx.fillStyle = "rgba(255,210,90,0.08)";
     }
 
+    ctx.fillRect(0, 0, width, height);
+
+    const vignette = ctx.createRadialGradient(
+      width / 2,
+      height / 2,
+      height * 0.18,
+      width / 2,
+      height / 2,
+      height * 0.85
+    );
+
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.22)");
+
+    ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, width, height);
 
     ctx.restore();
@@ -741,6 +851,48 @@ function App() {
     tempCtx.putImageData(imageData, 0, 0);
 
     return loadImage(tempCanvas.toDataURL("image/png"));
+  }
+
+  function roundedRect(ctx, x, y, width, height, radius) {
+    const r = Math.min(radius, width / 2, height / 2);
+
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + width - r, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+    ctx.lineTo(x + width, y + height - r);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+    ctx.lineTo(x + r, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+    const words = text.split(" ");
+    let line = "";
+    let currentY = y;
+
+    for (let i = 0; i < words.length; i++) {
+      const testLine = line + words[i] + " ";
+      const metrics = ctx.measureText(testLine);
+
+      if (metrics.width > maxWidth && i > 0) {
+        ctx.fillText(line, x, currentY);
+        line = words[i] + " ";
+        currentY += lineHeight;
+      } else {
+        line = testLine;
+      }
+    }
+
+    ctx.fillText(line, x, currentY);
+  }
+
+  function randomFrom(seed, min, max) {
+    const x = Math.sin(seed * 999) * 10000;
+    return min + (x - Math.floor(x)) * (max - min);
   }
 
   function clamp(value, min, max) {
@@ -890,9 +1042,12 @@ function App() {
                 <>
                   <h2>{currentScene.name}</h2>
                   <p>
-                    Postal detectada:{" "}
-                    <strong>{currentScene.postalSubtitle}</strong>
+                    Escena: <strong>{currentScene.postalTitle}</strong>
                   </p>
+
+                  <div className="sceneInstruction">
+                    {currentScene.instruction}
+                  </div>
 
                   <div className="peopleSelector">
                     <button
@@ -958,7 +1113,7 @@ function App() {
               <div className="cameraTopBar">
                 <div>
                   <span className="placeLabel">{currentScene.name}</span>
-                  <strong>{currentScene.postalSubtitle}</strong>
+                  <strong>{currentScene.instruction}</strong>
                 </div>
               </div>
 
@@ -982,8 +1137,8 @@ function App() {
                 ))}
 
                 <div className="instructions">
-                  <strong>Acomodá a las personas en los encuadres</strong>
-                  <span>Los objetos se ubican para no taparlas.</span>
+                  <strong>{currentScene.instruction}</strong>
+                  <span>Arrastrá la guía para ubicar la escena.</span>
                 </div>
               </div>
 
@@ -1001,7 +1156,7 @@ function App() {
             <div className="processing">
               <div className="spinner"></div>
               <h2>Creando postal…</h2>
-              <p>Agregando objetos alrededor de la persona.</p>
+              <p>Armando la escena dirigida.</p>
             </div>
           )}
 
@@ -1014,19 +1169,17 @@ function App() {
 
         <div className="panel">
           <div>
-            <p className="tag">Postal automática</p>
+            <p className="tag">Postal dirigida</p>
 
-            <h2>Objetos sin solapar V24</h2>
+            <h2>Escena con consigna V25</h2>
 
             {currentScene ? (
               <div className="detectedCard">
                 <span className="pin yellow"></span>
                 <div>
                   <strong>{currentScene.name}</strong>
-                  <small>{currentScene.postalSubtitle}</small>
-                  {currentScene.distance !== undefined && (
-                    <small>Aprox. {currentScene.distance} m de distancia</small>
-                  )}
+                  <small>{currentScene.postalTitle}</small>
+                  <small>{currentScene.instruction}</small>
                 </div>
               </div>
             ) : (
@@ -1040,8 +1193,8 @@ function App() {
             )}
 
             <p>
-              Esta versión no cambia el fondo: usa una toma limpia con piso y
-              agrega objetos según la ubicación de las personas.
+              Esta prueba no busca pegar stickers: dirige una pose y agrega
+              objetos que completan la escena.
             </p>
           </div>
 

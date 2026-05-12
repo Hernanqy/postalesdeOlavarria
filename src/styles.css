@@ -684,3 +684,15 @@ video {
   height: 100dvh;
   object-fit: cover;
 }
+
+.sceneInstruction {
+  margin: 18px auto 8px;
+  max-width: 440px;
+  padding: 16px 20px;
+  border-radius: 24px;
+  background: rgba(255, 210, 31, 0.22);
+  border: 3px solid rgba(255, 210, 31, 0.88);
+  color: var(--dark);
+  font-weight: 900;
+  line-height: 1.35;
+}

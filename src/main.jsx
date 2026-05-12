@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { SelfieSegmentation } from "@mediapipe/selfie_segmentation";
+
 import "./styles.css";
 
 const OUTPUT_WIDTH = 1280;

@@ -68,6 +68,7 @@ function App() {
   const [finalImage, setFinalImage] = useState(null);
   const [error, setError] = useState("");
   const [isCapturing, setIsCapturing] = useState(false);
+  const [showResultActions, setShowResultActions] = useState(false);
 
   const isCameraScreen = status === "starting" || status === "camera";
 
@@ -85,6 +86,22 @@ function App() {
       videoRef.current.play().catch(() => {});
     }
   }, [status, stream]);
+
+  useEffect(() => {
+    let timer;
+
+    if (status === "result" && finalImage) {
+      setShowResultActions(false);
+
+      timer = setTimeout(() => {
+        setShowResultActions(true);
+      }, 1600);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [status, finalImage]);
 
   useEffect(() => {
     return () => {
@@ -237,6 +254,7 @@ function App() {
 
       const result = canvas.toDataURL("image/png");
 
+      setShowResultActions(false);
       setFinalImage(result);
       setError("");
       setStatus("result");
@@ -379,6 +397,7 @@ function App() {
 
   function reset() {
     setFinalImage(null);
+    setShowResultActions(false);
     setError("");
 
     if (stream) {
@@ -500,7 +519,33 @@ function App() {
 
           {status === "result" && finalImage && (
             <div className="result">
-              <img src={finalImage} alt="Postal generada" />
+              <div className="resultCard">
+                <img src={finalImage} alt="Postal generada" />
+
+                <div className="thanksMessage">
+                  <span>✨ Gracias por tu visita ✨</span>
+                  <strong>{currentSpace?.name}</strong>
+                  <p>
+                    Tu postal cultural ya está lista para guardar o compartir.
+                  </p>
+                </div>
+
+                {showResultActions && (
+                  <div className="resultActions">
+                    <button className="primary full" onClick={sharePostal}>
+                      Compartir postal
+                    </button>
+
+                    <button className="secondary full" onClick={downloadPostal}>
+                      Guardar imagen
+                    </button>
+
+                    <button className="secondary full" onClick={reset}>
+                      Tomar otra foto
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -549,14 +594,14 @@ function App() {
           </div>
 
           <div className="actions">
-            {status === "result" && (
+            {status === "result" && showResultActions && (
               <>
-                <button className="primary full" onClick={downloadPostal}>
-                  Descargar postal
+                <button className="primary full" onClick={sharePostal}>
+                  Compartir postal
                 </button>
 
-                <button className="secondary full" onClick={sharePostal}>
-                  Compartir
+                <button className="secondary full" onClick={downloadPostal}>
+                  Guardar imagen
                 </button>
 
                 <button className="secondary full" onClick={reset}>

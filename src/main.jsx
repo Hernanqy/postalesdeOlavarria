@@ -50,11 +50,16 @@ const SPACES = {
 
 function App() {
   const videoRef = useRef(null);
+  const scannerVideoRef = useRef(null);
   const canvasRef = useRef(null);
   const cameraBoxRef = useRef(null);
   const draggingGuideRef = useRef(null);
+  const scannerLoopRef = useRef(null);
+  const scannerDetectorRef = useRef(null);
 
   const [stream, setStream] = useState(null);
+  const [scannerStream, setScannerStream] = useState(null);
+
   const [status, setStatus] = useState("idle");
   const [finalImage, setFinalImage] = useState(null);
   const [error, setError] = useState("");
@@ -83,6 +88,7 @@ function App() {
   ]);
 
   const isCameraScreen = status === "starting" || status === "camera";
+  const isScannerScreen = status === "scanner";
 
   useEffect(() => {
     loadSpaceFromUrl();
@@ -112,11 +118,10 @@ function App() {
 
   useEffect(() => {
     return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
+      stopCameraTracks();
+      stopScannerTracks();
     };
-  }, [stream]);
+  }, []);
 
   function loadSpaceFromUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -132,7 +137,10 @@ function App() {
   }
 
   function selectSpace(spaceId) {
-    if (!SPACES[spaceId]) return;
+    if (!SPACES[spaceId]) {
+      setError("QR no reconocido. Este espacio todavía no está cargado.");
+      return;
+    }
 
     const url = new URL(window.location.href);
     url.searchParams.set("space", spaceId);
@@ -144,20 +152,127 @@ function App() {
     setError("");
   }
 
-  function clearSpace() {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("space");
-    window.history.replaceState({}, "", url.toString());
+  function parseSpaceFromQr(rawValue) {
+    if (!rawValue) return null;
 
-    setCurrentSpace(null);
-    setFinalImage(null);
-    setStatus("idle");
+    const value = rawValue.trim();
+
+    if (SPACES[value]) return value;
+
+    if (value.startsWith("space=")) {
+      const id = value.replace("space=", "").trim();
+      return SPACES[id] ? id : null;
+    }
+
+    try {
+      const url = new URL(value);
+      const id = url.searchParams.get("space");
+      return id && SPACES[id] ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function startQrScanner() {
     setError("");
+    setFinalImage(null);
+    setStatus("scanner");
+
+    if (!("BarcodeDetector" in window)) {
+      setError(
+        "Este navegador no permite escanear QR desde la web. Probá con Chrome en Android o usá los botones de prueba."
+      );
+      return;
+    }
+
+    try {
+      const detector = new window.BarcodeDetector({
+        formats: ["qr_code"],
+      });
+
+      scannerDetectorRef.current = detector;
+
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+
+      setScannerStream(mediaStream);
+
+      setTimeout(() => {
+        if (scannerVideoRef.current) {
+          scannerVideoRef.current.srcObject = mediaStream;
+          scanQrLoop();
+        }
+      }, 50);
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo abrir la cámara para escanear el QR.");
+      setStatus("idle");
+    }
+  }
+
+  async function scanQrLoop() {
+    const video = scannerVideoRef.current;
+    const detector = scannerDetectorRef.current;
+
+    if (!video || !detector || status !== "scanner") {
+      scannerLoopRef.current = requestAnimationFrame(scanQrLoop);
+      return;
+    }
+
+    try {
+      if (video.readyState >= 2) {
+        const codes = await detector.detect(video);
+
+        if (codes && codes.length > 0) {
+          const rawValue = codes[0].rawValue;
+          const spaceId = parseSpaceFromQr(rawValue);
+
+          if (spaceId) {
+            stopScannerTracks();
+            selectSpace(spaceId);
+            return;
+          }
+
+          setError("QR leído, pero no corresponde a un espacio cultural.");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+
+    scannerLoopRef.current = requestAnimationFrame(scanQrLoop);
+  }
+
+  function stopScannerTracks() {
+    if (scannerLoopRef.current) {
+      cancelAnimationFrame(scannerLoopRef.current);
+      scannerLoopRef.current = null;
+    }
+
+    if (scannerStream) {
+      scannerStream.getTracks().forEach((track) => track.stop());
+      setScannerStream(null);
+    }
+
+    if (scannerVideoRef.current) {
+      scannerVideoRef.current.srcObject = null;
+    }
+  }
+
+  function closeScanner() {
+    stopScannerTracks();
+    setStatus("idle");
   }
 
   async function startCamera() {
     if (!currentSpace) {
-      setError("Primero seleccioná un espacio o escaneá el QR del lugar.");
+      setError("Primero escaneá el QR del espacio.");
       return;
     }
 
@@ -196,12 +311,19 @@ function App() {
     }
   }
 
-  function stopCamera() {
+  function stopCameraTracks() {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
       setStream(null);
     }
 
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }
+
+  function stopCamera() {
+    stopCameraTracks();
     setStatus("idle");
   }
 
@@ -352,9 +474,7 @@ function App() {
 
       drawPhotoInsideCenter(ctx, photo, OUTPUT_WIDTH, OUTPUT_HEIGHT);
       drawCenterLightWash(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
-
       ctx.drawImage(frame, 0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
-
       drawSoftVignette(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
       const result = canvas.toDataURL("image/png");
@@ -523,7 +643,11 @@ function App() {
   const activeGuides = guides.slice(0, peopleCount);
 
   return (
-    <main className={`app ${isCameraScreen ? "cameraMode" : ""}`}>
+    <main
+      className={`app ${
+        isCameraScreen || isScannerScreen ? "cameraMode" : ""
+      }`}
+    >
       <section className="layout">
         <div className="preview">
           {status === "idle" && (
@@ -540,11 +664,16 @@ function App() {
 
               {!currentSpace && (
                 <>
-                  <h2>Elegí un espacio</h2>
+                  <h2>Escaneá el QR del espacio</h2>
                   <p>
-                    Escaneá el QR del lugar o seleccioná una experiencia de
-                    prueba.
+                    Primero activá la app. Después escaneá el QR del museo o
+                    espacio cultural para cargar su marco.
                   </p>
+
+                  <button className="startButton" onClick={startQrScanner}>
+                    <span>▣</span>
+                    Escanear QR del espacio
+                  </button>
 
                   <div className="spaceGrid">
                     {Object.values(SPACES).map((space) => (
@@ -593,13 +722,40 @@ function App() {
                     Activar cámara
                   </button>
 
-                  <button className="demoButton" onClick={clearSpace}>
-                    Cambiar espacio
+                  <button
+                    className="demoButton"
+                    onClick={() => {
+                      setCurrentSpace(null);
+                      setFinalImage(null);
+                      setStatus("idle");
+                      setError("");
+                    }}
+                  >
+                    Escanear otro QR
                   </button>
                 </>
               )}
 
               {error && <p className="error">{error}</p>}
+            </div>
+          )}
+
+          {status === "scanner" && (
+            <div className="cameraBox">
+              <video ref={scannerVideoRef} autoPlay playsInline muted />
+
+              <div className="scannerOverlay">
+                <div className="scannerBox"></div>
+
+                <div className="instructions">
+                  <strong>Escaneá el QR del espacio</strong>
+                  <span>El QR cargará automáticamente el marco correcto.</span>
+                </div>
+              </div>
+
+              <button className="closeCameraButton" onClick={closeScanner}>
+                Salir
+              </button>
             </div>
           )}
 
@@ -672,11 +828,9 @@ function App() {
 
         <div className="panel">
           <div>
-            <p className="tag">Postal temática</p>
+            <p className="tag">Postales culturales</p>
 
-            <h2>
-              {currentSpace ? currentSpace.name : "Experiencias disponibles"}
-            </h2>
+            <h2>{currentSpace ? currentSpace.name : "Escaneá un QR"}</h2>
 
             {currentSpace ? (
               <div className="detectedCard">
@@ -692,7 +846,7 @@ function App() {
                 <span className="pin blue"></span>
                 <div>
                   <strong>Sin espacio seleccionado</strong>
-                  <small>Usá el QR del lugar o elegí una experiencia.</small>
+                  <small>Escaneá el QR del museo o espacio cultural.</small>
                 </div>
               </div>
             )}
@@ -718,16 +872,18 @@ function App() {
                   Tomar otra foto
                 </button>
 
-                <button className="secondary full" onClick={clearSpace}>
-                  Cambiar espacio
+                <button
+                  className="secondary full"
+                  onClick={() => {
+                    setCurrentSpace(null);
+                    setFinalImage(null);
+                    setStatus("idle");
+                    setError("");
+                  }}
+                >
+                  Escanear otro QR
                 </button>
               </>
-            )}
-
-            {status !== "idle" && status !== "result" && currentSpace && (
-              <button className="secondary full" onClick={reset}>
-                Reiniciar
-              </button>
             )}
           </div>
 

@@ -780,3 +780,25 @@ video {
   font-weight: 900;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
 }
+
+.scannerOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background:
+    linear-gradient(to bottom, rgba(0,0,0,0.18), transparent 35%, rgba(0,0,0,0.34));
+}
+
+.scannerBox {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: min(72vw, 360px);
+  height: min(72vw, 360px);
+  transform: translate(-50%, -50%);
+  border: 6px solid rgba(255, 210, 31, 0.95);
+  border-radius: 32px;
+  box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0.24),
+    0 0 0 12px rgba(18, 155, 227, 0.34);
+}

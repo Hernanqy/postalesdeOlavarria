@@ -13,6 +13,8 @@ const SPACES = {
     postalSubtitle: "Ciencia · Megafauna · Descubrimiento",
     frame: "/assets/marcos/ciencias-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
+    description:
+      "Viví una postal imposible entre ciencia, megafauna, fósiles y descubrimientos.",
   },
   "damaso-arce": {
     id: "damaso-arce",
@@ -21,6 +23,8 @@ const SPACES = {
     postalSubtitle: "Arte · Historia · Cultura",
     frame: "/assets/marcos/damaso-arce-photocall.png",
     instruction: "Ubicate entre los personajes del marco.",
+    description:
+      "Convertí tu visita en una postal artística junto a la historia cultural de Olavarría.",
   },
   "centro-cultural": {
     id: "centro-cultural",
@@ -29,6 +33,8 @@ const SPACES = {
     postalSubtitle: "Arte · Música · Comunidad",
     frame: "/assets/marcos/centro-cultural-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
+    description:
+      "Sacate una postal creativa rodeada de arte, música, encuentro y cultura local.",
   },
   emiliozzi: {
     id: "emiliozzi",
@@ -37,6 +43,8 @@ const SPACES = {
     postalSubtitle: "Automovilismo · Historia · Olavarría",
     frame: "/assets/marcos/emiliozzi-photocall.png",
     instruction: "Ubicate en el centro como protagonista de boxes.",
+    description:
+      "Llevate una postal junto a La Galera y el legado de los Hermanos Emiliozzi.",
   },
   "loma-negra": {
     id: "loma-negra",
@@ -45,67 +53,26 @@ const SPACES = {
     postalSubtitle: "Industria · Inmigración · Comunidad",
     frame: "/assets/marcos/loma-negra-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
+    description:
+      "Una postal para recordar la historia industrial, inmigrante y comunitaria de Loma Negra.",
   },
 };
 
 function App() {
   const videoRef = useRef(null);
-  const scannerVideoRef = useRef(null);
   const canvasRef = useRef(null);
-  const cameraBoxRef = useRef(null);
-  const draggingGuideRef = useRef(null);
-
-  const scannerLoopRef = useRef(null);
-  const scannerDetectorRef = useRef(null);
-  const scannerActiveRef = useRef(false);
 
   const [stream, setStream] = useState(null);
-  const [scannerStream, setScannerStream] = useState(null);
-
   const [status, setStatus] = useState("idle");
+  const [currentSpace, setCurrentSpace] = useState(null);
   const [finalImage, setFinalImage] = useState(null);
   const [error, setError] = useState("");
   const [isCapturing, setIsCapturing] = useState(false);
 
-  const [currentSpace, setCurrentSpace] = useState(null);
-  const [peopleCount, setPeopleCount] = useState(1);
-
-  const [guides, setGuides] = useState([
-    {
-      id: "person-1",
-      label: "Persona 1",
-      x: 50,
-      y: 55,
-      w: 42,
-      h: 58,
-    },
-    {
-      id: "person-2",
-      label: "Persona 2",
-      x: 62,
-      y: 55,
-      w: 32,
-      h: 56,
-    },
-  ]);
-
   const isCameraScreen = status === "starting" || status === "camera";
-  const isScannerScreen = status === "scanner";
 
   useEffect(() => {
     loadSpaceFromUrl();
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", stopDraggingGuide);
-    window.addEventListener("pointercancel", stopDraggingGuide);
-
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", stopDraggingGuide);
-      window.removeEventListener("pointercancel", stopDraggingGuide);
-    };
   }, []);
 
   useEffect(() => {
@@ -120,32 +87,8 @@ function App() {
   }, [status, stream]);
 
   useEffect(() => {
-    if (status === "scanner" && scannerVideoRef.current && scannerStream) {
-      scannerVideoRef.current.srcObject = scannerStream;
-
-      scannerVideoRef.current
-        .play()
-        .then(() => {
-          scannerActiveRef.current = true;
-
-          if (scannerLoopRef.current) {
-            cancelAnimationFrame(scannerLoopRef.current);
-          }
-
-          scannerLoopRef.current = requestAnimationFrame(scanQrLoop);
-        })
-        .catch((err) => {
-          console.error(err);
-          setError("No se pudo reproducir la cámara del escáner.");
-          setStatus("idle");
-        });
-    }
-  }, [status, scannerStream]);
-
-  useEffect(() => {
     return () => {
       stopCameraTracks();
-      stopScannerTracks();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -163,158 +106,9 @@ function App() {
     setCurrentSpace(null);
   }
 
-  function selectSpace(spaceId) {
-    if (!SPACES[spaceId]) {
-      setError("QR no reconocido. Este espacio todavía no está cargado.");
-      return;
-    }
-
-    const url = new URL(window.location.href);
-    url.searchParams.set("space", spaceId);
-    window.history.replaceState({}, "", url.toString());
-
-    setCurrentSpace(SPACES[spaceId]);
-    setFinalImage(null);
-    setStatus("idle");
-    setError("");
-  }
-
-  function clearSpace() {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("space");
-    window.history.replaceState({}, "", url.toString());
-
-    setCurrentSpace(null);
-    setFinalImage(null);
-    setStatus("idle");
-    setError("");
-  }
-
-  function parseSpaceFromQr(rawValue) {
-    if (!rawValue) return null;
-
-    const value = rawValue.trim();
-
-    if (SPACES[value]) return value;
-
-    if (value.startsWith("space=")) {
-      const id = value.replace("space=", "").trim();
-      return SPACES[id] ? id : null;
-    }
-
-    try {
-      const url = new URL(value);
-      const id = url.searchParams.get("space");
-      return id && SPACES[id] ? id : null;
-    } catch {
-      return null;
-    }
-  }
-
-  async function startQrScanner() {
-    setError("");
-    setFinalImage(null);
-
-    stopCameraTracks();
-    stopScannerTracks();
-
-    if (!("BarcodeDetector" in window)) {
-      setError(
-        "Este navegador no permite escanear QR desde la web. Probá con Chrome en Android o escaneá el QR del espacio directamente con la cámara del celular."
-      );
-      setStatus("idle");
-      return;
-    }
-
-    try {
-      const detector = new window.BarcodeDetector({
-        formats: ["qr_code"],
-      });
-
-      scannerDetectorRef.current = detector;
-
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
-
-      setScannerStream(mediaStream);
-      setStatus("scanner");
-    } catch (err) {
-      console.error(err);
-      setError("No se pudo abrir la cámara para escanear el QR.");
-      setStatus("idle");
-    }
-  }
-
-  async function scanQrLoop() {
-    if (!scannerActiveRef.current) return;
-
-    const video = scannerVideoRef.current;
-    const detector = scannerDetectorRef.current;
-
-    if (!video || !detector) {
-      scannerLoopRef.current = requestAnimationFrame(scanQrLoop);
-      return;
-    }
-
-    try {
-      if (video.readyState >= 2) {
-        const codes = await detector.detect(video);
-
-        if (codes && codes.length > 0) {
-          const rawValue = codes[0].rawValue;
-          const spaceId = parseSpaceFromQr(rawValue);
-
-          if (spaceId) {
-            stopScannerTracks();
-            selectSpace(spaceId);
-            return;
-          }
-
-          setError("QR leído, pero no corresponde a un espacio cultural.");
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }
-
-    scannerLoopRef.current = requestAnimationFrame(scanQrLoop);
-  }
-
-  function stopScannerTracks() {
-    scannerActiveRef.current = false;
-
-    if (scannerLoopRef.current) {
-      cancelAnimationFrame(scannerLoopRef.current);
-      scannerLoopRef.current = null;
-    }
-
-    const activeStream = scannerVideoRef.current?.srcObject || scannerStream;
-
-    if (activeStream) {
-      activeStream.getTracks().forEach((track) => track.stop());
-    }
-
-    if (scannerVideoRef.current) {
-      scannerVideoRef.current.srcObject = null;
-    }
-
-    setScannerStream(null);
-  }
-
-  function closeScanner() {
-    stopScannerTracks();
-    setStatus("idle");
-  }
-
   async function startCamera() {
     if (!currentSpace) {
-      setError("Primero escaneá el QR del espacio.");
+      setError("Escaneá el QR del espacio para cargar una postal.");
       return;
     }
 
@@ -371,90 +165,6 @@ function App() {
   function stopCamera() {
     stopCameraTracks();
     setStatus("idle");
-  }
-
-  function selectPeople(amount) {
-    setPeopleCount(amount);
-
-    if (amount === 1) {
-      setGuides([
-        {
-          id: "person-1",
-          label: "Persona 1",
-          x: 50,
-          y: 55,
-          w: 42,
-          h: 58,
-        },
-        {
-          id: "person-2",
-          label: "Persona 2",
-          x: 62,
-          y: 55,
-          w: 32,
-          h: 56,
-        },
-      ]);
-    }
-
-    if (amount === 2) {
-      setGuides([
-        {
-          id: "person-1",
-          label: "Persona 1",
-          x: 42,
-          y: 55,
-          w: 30,
-          h: 56,
-        },
-        {
-          id: "person-2",
-          label: "Persona 2",
-          x: 60,
-          y: 55,
-          w: 30,
-          h: 56,
-        },
-      ]);
-    }
-  }
-
-  function startDraggingGuide(event, guideId) {
-    event.preventDefault();
-    draggingGuideRef.current = guideId;
-    moveGuideToPointer(event, guideId);
-  }
-
-  function stopDraggingGuide() {
-    draggingGuideRef.current = null;
-  }
-
-  function handlePointerMove(event) {
-    if (!draggingGuideRef.current) return;
-    moveGuideToPointer(event, draggingGuideRef.current);
-  }
-
-  function moveGuideToPointer(event, guideId) {
-    const cameraBox = cameraBoxRef.current;
-
-    if (!cameraBox) return;
-
-    const rect = cameraBox.getBoundingClientRect();
-
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
-
-    setGuides((prev) =>
-      prev.map((guide) =>
-        guide.id === guideId
-          ? {
-              ...guide,
-              x: clamp(x, 28, 72),
-              y: clamp(y, 32, 76),
-            }
-          : guide
-      )
-    );
   }
 
   function capturePhoto() {
@@ -520,7 +230,9 @@ function App() {
 
       drawPhotoInsideCenter(ctx, photo, OUTPUT_WIDTH, OUTPUT_HEIGHT);
       drawCenterLightWash(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+
       ctx.drawImage(frame, 0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+
       drawSoftVignette(ctx, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
       const result = canvas.toDataURL("image/png");
@@ -586,10 +298,6 @@ function App() {
     ctx.fillRect(0, 0, width, height);
 
     ctx.restore();
-  }
-
-  function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
   }
 
   function loadImage(src) {
@@ -687,18 +395,18 @@ function App() {
     }
   }
 
-  const activeGuides = guides.slice(0, peopleCount);
-
   return (
-    <main
-      className={`app ${
-        isCameraScreen || isScannerScreen ? "cameraMode" : ""
-      }`}
-    >
+    <main className={`app ${isCameraScreen ? "cameraMode" : ""}`}>
       <section className="layout">
         <div className="preview">
           {status === "idle" && (
             <div className="intro">
+              <img
+                src="/assets/logos/olavarria-municipio.png"
+                alt="Olavarría Municipio"
+                className="municipioLogo"
+              />
+
               <div className="brandIcons">
                 <span className="iconGhost"></span>
                 <span className="iconRoad"></span>
@@ -707,70 +415,39 @@ function App() {
                 <span className="iconDotBig"></span>
               </div>
 
-              <h1>Postal Viva</h1>
-
               {!currentSpace && (
                 <>
+                  <h1>Postales culturales</h1>
                   <h2>Escaneá el QR del espacio</h2>
+
                   <p>
-                    Primero activá la app. Después escaneá el QR del museo o
-                    espacio cultural para cargar su marco.
+                    Acercate al punto de foto, escaneá el QR del museo o espacio
+                    cultural y creá tu postal de recuerdo.
                   </p>
 
-                  <button className="startButton" onClick={startQrScanner}>
-                    <span>▣</span>
-                    Escanear QR del espacio
-                  </button>
-
-                  <div className="spaceGrid">
-                    {Object.values(SPACES).map((space) => (
-                      <button
-                        key={space.id}
-                        className="spaceButton"
-                        onClick={() => selectSpace(space.id)}
-                      >
-                        <strong>{space.name}</strong>
-                        <span>{space.postalSubtitle}</span>
-                      </button>
-                    ))}
+                  <div className="sceneInstruction">
+                    El QR de cada lugar abre automáticamente su marco temático.
                   </div>
                 </>
               )}
 
               {currentSpace && (
                 <>
+                  <h1>Creá tu postal</h1>
                   <h2>{currentSpace.name}</h2>
-                  <p>
-                    Escena: <strong>{currentSpace.postalTitle}</strong>
+
+                  <p className="motivationalText">
+                    Sacate una foto, convertí tu visita en una postal cultural y
+                    compartila.
                   </p>
 
                   <div className="sceneInstruction">
                     {currentSpace.instruction}
                   </div>
 
-                  <div className="peopleSelector">
-                    <button
-                      className={peopleCount === 1 ? "selected" : ""}
-                      onClick={() => selectPeople(1)}
-                    >
-                      1 persona
-                    </button>
-
-                    <button
-                      className={peopleCount === 2 ? "selected" : ""}
-                      onClick={() => selectPeople(2)}
-                    >
-                      2 personas
-                    </button>
-                  </div>
-
                   <button className="startButton" onClick={startCamera}>
                     <span>📷</span>
                     Activar cámara
-                  </button>
-
-                  <button className="demoButton" onClick={clearSpace}>
-                    Escanear otro QR
                   </button>
                 </>
               )}
@@ -779,27 +456,8 @@ function App() {
             </div>
           )}
 
-          {status === "scanner" && (
-            <div className="cameraBox">
-              <video ref={scannerVideoRef} autoPlay playsInline muted />
-
-              <div className="scannerOverlay">
-                <div className="scannerBox"></div>
-
-                <div className="instructions">
-                  <strong>Escaneá el QR del espacio</strong>
-                  <span>El QR cargará automáticamente el marco correcto.</span>
-                </div>
-              </div>
-
-              <button className="closeCameraButton" onClick={closeScanner}>
-                Salir
-              </button>
-            </div>
-          )}
-
           {(status === "starting" || status === "camera") && currentSpace && (
-            <div className="cameraBox" ref={cameraBoxRef}>
+            <div className="cameraBox">
               <video ref={videoRef} autoPlay playsInline muted />
 
               <div className="cameraTopBar">
@@ -812,27 +470,9 @@ function App() {
               <div className="overlay">
                 <div className="centerPhotoArea"></div>
 
-                {activeGuides.map((guide) => (
-                  <div
-                    key={guide.id}
-                    className="safePerson"
-                    style={{
-                      left: `${guide.x}%`,
-                      top: `${guide.y}%`,
-                      width: `${guide.w}%`,
-                      height: `${guide.h}%`,
-                    }}
-                    onPointerDown={(event) =>
-                      startDraggingGuide(event, guide.id)
-                    }
-                  >
-                    <span className="dragHint">{guide.label}</span>
-                  </div>
-                ))}
-
                 <div className="instructions">
                   <strong>Ubicate en el centro libre del marco</strong>
-                  <span>Ese espacio será el centro de la postal.</span>
+                  <span>Ese espacio será el centro de tu postal.</span>
                 </div>
               </div>
 
@@ -867,17 +507,27 @@ function App() {
 
         <div className="panel">
           <div>
+            <img
+              src="/assets/logos/olavarria-municipio.png"
+              alt="Olavarría Municipio"
+              className="panelLogo"
+            />
+
             <p className="tag">Postales culturales</p>
 
-            <h2>{currentSpace ? currentSpace.name : "Escaneá un QR"}</h2>
+            <h2>
+              {currentSpace
+                ? currentSpace.name
+                : "Escaneá el QR del espacio"}
+            </h2>
 
             {currentSpace ? (
               <div className="detectedCard">
                 <span className="pin yellow"></span>
                 <div>
-                  <strong>{currentSpace.name}</strong>
-                  <small>{currentSpace.postalTitle}</small>
-                  <small>{currentSpace.instruction}</small>
+                  <strong>{currentSpace.postalTitle}</strong>
+                  <small>{currentSpace.postalSubtitle}</small>
+                  <small>{currentSpace.description}</small>
                 </div>
               </div>
             ) : (
@@ -885,14 +535,16 @@ function App() {
                 <span className="pin blue"></span>
                 <div>
                   <strong>Sin espacio seleccionado</strong>
-                  <small>Escaneá el QR del museo o espacio cultural.</small>
+                  <small>
+                    Escaneá el QR del museo o espacio cultural para comenzar.
+                  </small>
                 </div>
               </div>
             )}
 
             <p>
-              Cada QR carga un marco PNG transparente diferente y ubica la foto
-              real en el centro del photocall.
+              Cada espacio cultural tiene un marco propio. Sacá tu foto en el
+              centro, descargá tu postal y compartí tu visita.
             </p>
           </div>
 
@@ -909,10 +561,6 @@ function App() {
 
                 <button className="secondary full" onClick={reset}>
                   Tomar otra foto
-                </button>
-
-                <button className="secondary full" onClick={clearSpace}>
-                  Escanear otro QR
                 </button>
               </>
             )}

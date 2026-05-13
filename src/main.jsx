@@ -54,8 +54,10 @@ function App() {
   const canvasRef = useRef(null);
   const cameraBoxRef = useRef(null);
   const draggingGuideRef = useRef(null);
+
   const scannerLoopRef = useRef(null);
   const scannerDetectorRef = useRef(null);
+  const scannerActiveRef = useRef(false);
 
   const [stream, setStream] = useState(null);
   const [scannerStream, setScannerStream] = useState(null);
@@ -113,14 +115,39 @@ function App() {
       stream
     ) {
       videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
     }
   }, [status, stream]);
+
+  useEffect(() => {
+    if (status === "scanner" && scannerVideoRef.current && scannerStream) {
+      scannerVideoRef.current.srcObject = scannerStream;
+
+      scannerVideoRef.current
+        .play()
+        .then(() => {
+          scannerActiveRef.current = true;
+
+          if (scannerLoopRef.current) {
+            cancelAnimationFrame(scannerLoopRef.current);
+          }
+
+          scannerLoopRef.current = requestAnimationFrame(scanQrLoop);
+        })
+        .catch((err) => {
+          console.error(err);
+          setError("No se pudo reproducir la cámara del escáner.");
+          setStatus("idle");
+        });
+    }
+  }, [status, scannerStream]);
 
   useEffect(() => {
     return () => {
       stopCameraTracks();
       stopScannerTracks();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function loadSpaceFromUrl() {
@@ -152,6 +179,17 @@ function App() {
     setError("");
   }
 
+  function clearSpace() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("space");
+    window.history.replaceState({}, "", url.toString());
+
+    setCurrentSpace(null);
+    setFinalImage(null);
+    setStatus("idle");
+    setError("");
+  }
+
   function parseSpaceFromQr(rawValue) {
     if (!rawValue) return null;
 
@@ -176,12 +214,15 @@ function App() {
   async function startQrScanner() {
     setError("");
     setFinalImage(null);
-    setStatus("scanner");
+
+    stopCameraTracks();
+    stopScannerTracks();
 
     if (!("BarcodeDetector" in window)) {
       setError(
-        "Este navegador no permite escanear QR desde la web. Probá con Chrome en Android o usá los botones de prueba."
+        "Este navegador no permite escanear QR desde la web. Probá con Chrome en Android o escaneá el QR del espacio directamente con la cámara del celular."
       );
+      setStatus("idle");
       return;
     }
 
@@ -202,13 +243,7 @@ function App() {
       });
 
       setScannerStream(mediaStream);
-
-      setTimeout(() => {
-        if (scannerVideoRef.current) {
-          scannerVideoRef.current.srcObject = mediaStream;
-          scanQrLoop();
-        }
-      }, 50);
+      setStatus("scanner");
     } catch (err) {
       console.error(err);
       setError("No se pudo abrir la cámara para escanear el QR.");
@@ -217,10 +252,12 @@ function App() {
   }
 
   async function scanQrLoop() {
+    if (!scannerActiveRef.current) return;
+
     const video = scannerVideoRef.current;
     const detector = scannerDetectorRef.current;
 
-    if (!video || !detector || status !== "scanner") {
+    if (!video || !detector) {
       scannerLoopRef.current = requestAnimationFrame(scanQrLoop);
       return;
     }
@@ -250,19 +287,24 @@ function App() {
   }
 
   function stopScannerTracks() {
+    scannerActiveRef.current = false;
+
     if (scannerLoopRef.current) {
       cancelAnimationFrame(scannerLoopRef.current);
       scannerLoopRef.current = null;
     }
 
-    if (scannerStream) {
-      scannerStream.getTracks().forEach((track) => track.stop());
-      setScannerStream(null);
+    const activeStream = scannerVideoRef.current?.srcObject || scannerStream;
+
+    if (activeStream) {
+      activeStream.getTracks().forEach((track) => track.stop());
     }
 
     if (scannerVideoRef.current) {
       scannerVideoRef.current.srcObject = null;
     }
+
+    setScannerStream(null);
   }
 
   function closeScanner() {
@@ -300,6 +342,7 @@ function App() {
       setTimeout(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
+          videoRef.current.play().catch(() => {});
         }
       }, 50);
     } catch (err) {
@@ -312,14 +355,17 @@ function App() {
   }
 
   function stopCameraTracks() {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      setStream(null);
+    const activeStream = videoRef.current?.srcObject || stream;
+
+    if (activeStream) {
+      activeStream.getTracks().forEach((track) => track.stop());
     }
 
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+
+    setStream(null);
   }
 
   function stopCamera() {
@@ -633,6 +679,7 @@ function App() {
       setTimeout(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
         }
       }, 50);
     } else {
@@ -722,15 +769,7 @@ function App() {
                     Activar cámara
                   </button>
 
-                  <button
-                    className="demoButton"
-                    onClick={() => {
-                      setCurrentSpace(null);
-                      setFinalImage(null);
-                      setStatus("idle");
-                      setError("");
-                    }}
-                  >
+                  <button className="demoButton" onClick={clearSpace}>
                     Escanear otro QR
                   </button>
                 </>
@@ -872,15 +911,7 @@ function App() {
                   Tomar otra foto
                 </button>
 
-                <button
-                  className="secondary full"
-                  onClick={() => {
-                    setCurrentSpace(null);
-                    setFinalImage(null);
-                    setStatus("idle");
-                    setError("");
-                  }}
-                >
+                <button className="secondary full" onClick={clearSpace}>
                   Escanear otro QR
                 </button>
               </>

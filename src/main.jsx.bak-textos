@@ -9,8 +9,8 @@ const SPACES = {
   ciencias: {
     id: "ciencias",
     name: "Museo de las Ciencias",
-    postalTitle: "Yo visité el Museo de las Ciencias",
-    postalSubtitle: "Ciencia · Megafauna · Descubrimiento",
+    postalTitle: "Yo visitÃ© el Museo de las Ciencias",
+    postalSubtitle: "Ciencia Â· Megafauna Â· Descubrimiento",
     frame: "/assets/marcos/ciencias-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
     description:
@@ -19,18 +19,18 @@ const SPACES = {
   "damaso-arce": {
     id: "damaso-arce",
     name: "Museo DÃ¡maso Arce",
-    postalTitle: "Yo visité el Museo DÃ¡maso Arce",
-    postalSubtitle: "Arte · Historia · Cultura",
+    postalTitle: "Yo visitÃ© el Museo DÃ¡maso Arce",
+    postalSubtitle: "Arte Â· Historia Â· Cultura",
     frame: "/assets/marcos/damaso-arce-photocall.png",
     instruction: "Ubicate entre los personajes del marco.",
     description:
-      "ConvertÃ­ tu visita en una postal artÃ­stica junto a la historia cultural de Olavarría.",
+      "ConvertÃ­ tu visita en una postal artÃ­stica junto a la historia cultural de OlavarrÃ­a.",
   },
   "centro-cultural": {
     id: "centro-cultural",
     name: "Centro Cultural",
-    postalTitle: "Yo visité el Centro Cultural",
-    postalSubtitle: "Arte · Música · Comunidad",
+    postalTitle: "Yo visitÃ© el Centro Cultural",
+    postalSubtitle: "Arte Â· MÃºsica Â· Comunidad",
     frame: "/assets/marcos/centro-cultural-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
     description:
@@ -39,8 +39,8 @@ const SPACES = {
   emiliozzi: {
     id: "emiliozzi",
     name: "Museo Hermanos Emiliozzi",
-    postalTitle: "Yo visité el Museo Hermanos Emiliozzi",
-    postalSubtitle: "Automovilismo · Historia · Olavarría",
+    postalTitle: "Yo visitÃ© el Museo Hermanos Emiliozzi",
+    postalSubtitle: "Automovilismo Â· Historia Â· OlavarrÃ­a",
     frame: "/assets/marcos/emiliozzi-photocall.png",
     instruction: "Ubicate en el centro como protagonista de boxes.",
     description:
@@ -49,8 +49,8 @@ const SPACES = {
   "loma-negra": {
     id: "loma-negra",
     name: "Museo de Loma Negra",
-    postalTitle: "Yo visité el Museo de Loma Negra",
-    postalSubtitle: "Industria · InmigraciÃ³n · Comunidad",
+    postalTitle: "Yo visitÃ© el Museo de Loma Negra",
+    postalSubtitle: "Industria Â· InmigraciÃ³n Â· Comunidad",
     frame: "/assets/marcos/loma-negra-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
     description:
@@ -58,13 +58,13 @@ const SPACES = {
   },
   bioparque: {
     id: "bioparque",
-    name: "Bioparque La Máxima",
-    postalTitle: "Yo visité el Bioparque La Máxima",
-    postalSubtitle: "Naturaleza · Fauna autóctona · Comunidad",
+    name: "Bioparque La MÃ¡xima",
+    postalTitle: "Yo visitÃ© el Bioparque La MÃ¡xima",
+    postalSubtitle: "Naturaleza Â· Fauna autÃ³ctona Â· Comunidad",
     frame: "/assets/marcos/bioparque-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
     description:
-      "Una postal para recordar tu visita al Bioparque La Máxima, entre naturaleza, animales autóctonos y patrimonio vivo de Olavarría.",
+      "Una postal para recordar tu visita al Bioparque La MÃ¡xima, entre naturaleza, animales autÃ³ctonos y patrimonio vivo de OlavarrÃ­a.",
   }};
 
 function App() {
@@ -134,7 +134,7 @@ function App() {
 
   async function startCamera() {
     if (!currentSpace) {
-      setError("Escaneá el QR del espacio para cargar una postal.");
+      setError("EscaneÃ¡ el QR del espacio para cargar una postal.");
       return;
     }
 
@@ -168,7 +168,7 @@ function App() {
     } catch (err) {
       console.error(err);
       setError(
-        "No se pudo acceder a la cámara. RevisÃ¡ permisos y usÃ¡ HTTPS o localhost."
+        "No se pudo acceder a la cÃ¡mara. RevisÃ¡ permisos y usÃ¡ HTTPS o localhost."
       );
       setStatus("idle");
     }
@@ -205,7 +205,7 @@ function App() {
 
       if (!video || !canvas) {
         setIsCapturing(false);
-        setError("No se pudo capturar la cámara.");
+        setError("No se pudo capturar la cÃ¡mara.");
         setStatus("idle");
         return;
       }
@@ -431,7 +431,7 @@ function App() {
             <div className="intro">
               <img
                 src="/assets/logos/olavarria-municipio.png"
-                alt="Olavarría Municipio"
+                alt="OlavarrÃ­a Municipio"
                 className="municipioLogo"
               />
 
@@ -446,7 +446,7 @@ function App() {
               {!currentSpace && (
                 <>
                   <h1>Postales culturales</h1>
-                  <h2>Escaneá el QR del espacio</h2>
+                  <h2>EscaneÃ¡ el QR del espacio</h2>
 
                   <p>
                     Acercate al punto de foto, escaneÃ¡ el QR del museo o espacio
@@ -461,11 +461,11 @@ function App() {
 
               {currentSpace && (
                 <>
-                  <h1>Postales culturales</h1>
+                  <h1>CreÃ¡ tu postal</h1>
                   <h2>{currentSpace.name}</h2>
 
                   <p className="motivationalText">
-                    Sacate una foto, convertí tu visita en una postal cultural y
+                    Sacate una foto, convertÃ­ tu visita en una postal cultural y
                     compartila.
                   </p>
 
@@ -474,8 +474,8 @@ function App() {
                   </div>
 
                   <button className="startButton" onClick={startCamera}>
-                    <span>📷</span>
-                    Activar cámara
+                    <span>ðŸ“·</span>
+                    Activar cÃ¡mara
                   </button>
                 </>
               )}
@@ -563,7 +563,7 @@ function App() {
           <div>
             <img
               src="/assets/logos/olavarria-municipio.png"
-              alt="Olavarría Municipio"
+              alt="OlavarrÃ­a Municipio"
               className="panelLogo"
             />
 
@@ -572,7 +572,7 @@ function App() {
             <h2>
               {currentSpace
                 ? currentSpace.name
-                : "Escaneá el QR del espacio"}
+                : "EscaneÃ¡ el QR del espacio"}
             </h2>
 
             {currentSpace ? (
@@ -590,15 +590,15 @@ function App() {
                 <div>
                   <strong>Sin espacio seleccionado</strong>
                   <small>
-                    Escaneá el QR del museo o espacio cultural para comenzar.
+                    EscaneÃ¡ el QR del museo o espacio cultural para comenzar.
                   </small>
                 </div>
               </div>
             )}
 
             <p>
-              Cada espacio cultural tiene un marco propio. Sacá tu foto en el
-              centro, descargá tu postal y compartí tu visita.
+              Cada espacio cultural tiene un marco propio. SacÃ¡ tu foto en el
+              centro, descargÃ¡ tu postal y compartÃ­ tu visita.
             </p>
           </div>
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -9,64 +9,63 @@ const SPACES = {
   ciencias: {
     id: "ciencias",
     name: "Museo de las Ciencias",
-    postalTitle: "Yo visite el Museo de las Ciencias",
-    postalSubtitle: "Ciencia - Megafauna - Descubrimiento",
+    postalTitle: "Yo visité el Museo de las Ciencias",
+    postalSubtitle: "Ciencia · Megafauna · Descubrimiento",
     frame: "/assets/marcos/ciencias-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
     description:
-      "Una postal para recordar tu visita al Museo de las Ciencias.",
+      "VivÃ­ una postal imposible entre ciencia, megafauna, fÃ³siles y descubrimientos.",
   },
   "damaso-arce": {
     id: "damaso-arce",
-    name: "Museo Damaso Arce",
-    postalTitle: "Yo visite el Museo Damaso Arce",
-    postalSubtitle: "Arte - Historia - Cultura",
+    name: "Museo DÃ¡maso Arce",
+    postalTitle: "Yo visité el Museo DÃ¡maso Arce",
+    postalSubtitle: "Arte · Historia · Cultura",
     frame: "/assets/marcos/damaso-arce-photocall.png",
     instruction: "Ubicate entre los personajes del marco.",
     description:
-      "Una postal para recordar tu visita al Museo Damaso Arce.",
+      "ConvertÃ­ tu visita en una postal artÃ­stica junto a la historia cultural de Olavarría.",
   },
   "centro-cultural": {
     id: "centro-cultural",
     name: "Centro Cultural",
-    postalTitle: "Yo visite el Centro Cultural",
-    postalSubtitle: "Arte - Musica - Comunidad",
+    postalTitle: "Yo visité el Centro Cultural",
+    postalSubtitle: "Arte · Música · Comunidad",
     frame: "/assets/marcos/centro-cultural-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
     description:
-      "Una postal para recordar tu visita al Centro Cultural.",
+      "Sacate una postal creativa rodeada de arte, mÃºsica, encuentro y cultura local.",
   },
   emiliozzi: {
     id: "emiliozzi",
     name: "Museo Hermanos Emiliozzi",
-    postalTitle: "Yo visite el Museo Hermanos Emiliozzi",
-    postalSubtitle: "Automovilismo - Historia - Olavarria",
+    postalTitle: "Yo visité el Museo Hermanos Emiliozzi",
+    postalSubtitle: "Automovilismo · Historia · Olavarría",
     frame: "/assets/marcos/emiliozzi-photocall.png",
-    instruction: "Ubicate en el centro como protagonista.",
+    instruction: "Ubicate en el centro como protagonista de boxes.",
     description:
-      "Una postal para recordar tu visita al Museo Hermanos Emiliozzi.",
+      "Llevate una postal junto a La Galera y el legado de los Hermanos Emiliozzi.",
   },
   "loma-negra": {
     id: "loma-negra",
     name: "Museo de Loma Negra",
-    postalTitle: "Yo visite el Museo de Loma Negra",
-    postalSubtitle: "Industria - Inmigracion - Comunidad",
+    postalTitle: "Yo visité el Museo de Loma Negra",
+    postalSubtitle: "Industria · InmigraciÃ³n · Comunidad",
     frame: "/assets/marcos/loma-negra-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
     description:
-      "Una postal para recordar tu visita al Museo de Loma Negra.",
+      "Una postal para recordar la historia industrial, inmigrante y comunitaria de Loma Negra.",
   },
   bioparque: {
     id: "bioparque",
-    name: "Bioparque La Maxima",
-    postalTitle: "Yo visite el Bioparque La Maxima",
-    postalSubtitle: "Naturaleza - Fauna autoctona - Comunidad",
+    name: "Bioparque La Máxima",
+    postalTitle: "Yo visité el Bioparque La Máxima",
+    postalSubtitle: "Naturaleza · Fauna autóctona · Comunidad",
     frame: "/assets/marcos/bioparque-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
     description:
-      "Una postal para recordar tu visita al Bioparque La Maxima.",
-  },
-};;
+      "Una postal para recordar tu visita al Bioparque La Máxima, entre naturaleza, animales autóctonos y patrimonio vivo de Olavarría.",
+  }};
 
 function App() {
   const videoRef = useRef(null);
@@ -135,7 +134,7 @@ function App() {
 
   async function startCamera() {
     if (!currentSpace) {
-      setError("Escanea el QR del espacio para cargar una postal.");
+      setError("Escaneá el QR del espacio para cargar una postal.");
       return;
     }
 
@@ -169,7 +168,7 @@ function App() {
     } catch (err) {
       console.error(err);
       setError(
-        "No se pudo acceder a la camara. Revisa permisos y usa HTTPS o localhost."
+        "No se pudo acceder a la cámara. RevisÃ¡ permisos y usÃ¡ HTTPS o localhost."
       );
       setStatus("idle");
     }
@@ -206,7 +205,7 @@ function App() {
 
       if (!video || !canvas) {
         setIsCapturing(false);
-        setError("No se pudo capturar la camara.");
+        setError("No se pudo capturar la cámara.");
         setStatus("idle");
         return;
       }
@@ -432,7 +431,7 @@ function App() {
             <div className="intro">
               <img
                 src="/assets/logos/olavarria-municipio.png"
-                alt="Olavarria Municipio"
+                alt="Olavarría Municipio"
                 className="municipioLogo"
               />
 
@@ -447,15 +446,15 @@ function App() {
               {!currentSpace && (
                 <>
                   <h1>Postales culturales</h1>
-                  <h2>Escanea el QR del espacio</h2>
+                  <h2>Escaneá el QR del espacio</h2>
 
                   <p>
-                    Acercate al punto de foto, escanea el QR del museo o espacio
-                    cultural y crea tu postal de recuerdo.
+                    Acercate al punto de foto, escaneÃ¡ el QR del museo o espacio
+                    cultural y creÃ¡ tu postal de recuerdo.
                   </p>
 
                   <div className="sceneInstruction">
-                    El QR de cada lugar abre automaticamente su marco tematico.
+                    El QR de cada lugar abre automÃ¡ticamente su marco temÃ¡tico.
                   </div>
                 </>
               )}
@@ -466,7 +465,7 @@ function App() {
                   <h2>{currentSpace.name}</h2>
 
                   <p className="motivationalText">
-                    Sacate una foto, converti tu visita en una postal cultural y
+                    Sacate una foto, convertí tu visita en una postal cultural y
                     compartila.
                   </p>
 
@@ -475,10 +474,68 @@ function App() {
                   </div>
 
                   <button className="startButton" onClick={startCamera}>
-                    <span>Gracias por tu visita</span>
+                    <span>📷</span>
+                    Activar cámara
+                  </button>
+                </>
+              )}
+
+              {error && <p className="error">{error}</p>}
+            </div>
+          )}
+
+          {(status === "starting" || status === "camera") && currentSpace && (
+            <div className="cameraBox">
+              <video ref={videoRef} autoPlay playsInline muted />
+
+              <div className="cameraTopBar">
+                <div>
+                  <span className="placeLabel">{currentSpace.name}</span>
+                  <strong>{currentSpace.instruction}</strong>
+                </div>
+              </div>
+
+              <div className="overlay">
+                <div className="centerPhotoArea"></div>
+
+                <div className="instructions">
+                  <strong>Ubicate en el centro libre del marco</strong>
+                  <span>Ese espacio serÃ¡ el centro de tu postal.</span>
+                </div>
+              </div>
+
+              <button
+                className={`captureButton ${isCapturing ? "capturing" : ""}`}
+                onClick={capturePhoto}
+                aria-label="Sacar foto"
+              >
+                <span></span>
+              </button>
+
+              <button className="closeCameraButton" onClick={stopCamera}>
+                Salir
+              </button>
+            </div>
+          )}
+
+          {status === "processing" && (
+            <div className="processing">
+              <div className="spinner"></div>
+              <h2>Creando postalâ€¦</h2>
+              <p>Combinando tu foto con el marco del espacio.</p>
+            </div>
+          )}
+
+          {status === "result" && finalImage && (
+            <div className="result">
+              <div className="resultCard">
+                <img src={finalImage} alt="Postal generada" />
+
+                <div className="thanksMessage">
+                  <span>âœ¨ Gracias por tu visita âœ¨</span>
                   <strong>{currentSpace?.name}</strong>
                   <p>
-                    Tu postal cultural ya esta lista para guardar o compartir.
+                    Tu postal cultural ya estÃ¡ lista para guardar o compartir.
                   </p>
                 </div>
 
@@ -506,7 +563,7 @@ function App() {
           <div>
             <img
               src="/assets/logos/olavarria-municipio.png"
-              alt="Olavarria Municipio"
+              alt="Olavarría Municipio"
               className="panelLogo"
             />
 
@@ -515,7 +572,7 @@ function App() {
             <h2>
               {currentSpace
                 ? currentSpace.name
-                : "Escanea el QR del espacio"}
+                : "Escaneá el QR del espacio"}
             </h2>
 
             {currentSpace ? (
@@ -533,14 +590,15 @@ function App() {
                 <div>
                   <strong>Sin espacio seleccionado</strong>
                   <small>
-                    Escanea el QR del museo o espacio cultural para comenzar.
+                    Escaneá el QR del museo o espacio cultural para comenzar.
                   </small>
                 </div>
               </div>
             )}
 
             <p>
-              Cada espacio cultural tiene un marco propio. Saca tu foto en el centro, descarga tu postal y comparti tu visita.
+              Cada espacio cultural tiene un marco propio. Sacá tu foto en el
+              centro, descargá tu postal y compartí tu visita.
             </p>
           </div>
 

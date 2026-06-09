@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -13,8 +13,7 @@ const SPACES = {
     postalSubtitle: "Ciencia - Megafauna - Descubrimiento",
     frame: "/assets/marcos/ciencias-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
-    description:
-      "Una postal para recordar tu visita al Museo de las Ciencias.",
+    description: "Una postal para recordar tu visita al Museo de las Ciencias.",
   },
   "damaso-arce": {
     id: "damaso-arce",
@@ -23,8 +22,7 @@ const SPACES = {
     postalSubtitle: "Arte - Historia - Cultura",
     frame: "/assets/marcos/damaso-arce-photocall.png",
     instruction: "Ubicate entre los personajes del marco.",
-    description:
-      "Una postal para recordar tu visita al Museo Damaso Arce.",
+    description: "Una postal para recordar tu visita al Museo Damaso Arce.",
   },
   "centro-cultural": {
     id: "centro-cultural",
@@ -33,8 +31,7 @@ const SPACES = {
     postalSubtitle: "Arte - Musica - Comunidad",
     frame: "/assets/marcos/centro-cultural-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
-    description:
-      "Una postal para recordar tu visita al Centro Cultural.",
+    description: "Una postal para recordar tu visita al Centro Cultural.",
   },
   emiliozzi: {
     id: "emiliozzi",
@@ -43,8 +40,7 @@ const SPACES = {
     postalSubtitle: "Automovilismo - Historia - Olavarria",
     frame: "/assets/marcos/emiliozzi-photocall.png",
     instruction: "Ubicate en el centro como protagonista.",
-    description:
-      "Una postal para recordar tu visita al Museo Hermanos Emiliozzi.",
+    description: "Una postal para recordar tu visita al Museo Hermanos Emiliozzi.",
   },
   "loma-negra": {
     id: "loma-negra",
@@ -53,8 +49,7 @@ const SPACES = {
     postalSubtitle: "Industria - Inmigracion - Comunidad",
     frame: "/assets/marcos/loma-negra-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
-    description:
-      "Una postal para recordar tu visita al Museo de Loma Negra.",
+    description: "Una postal para recordar tu visita al Museo de Loma Negra.",
   },
   bioparque: {
     id: "bioparque",
@@ -63,10 +58,9 @@ const SPACES = {
     postalSubtitle: "Naturaleza - Fauna autoctona - Comunidad",
     frame: "/assets/marcos/bioparque-photocall.png",
     instruction: "Ubicate dentro del centro libre del marco.",
-    description:
-      "Una postal para recordar tu visita al Bioparque La Maxima.",
+    description: "Una postal para recordar tu visita al Bioparque La Maxima.",
   },
-};;
+};
 
 function App() {
   const videoRef = useRef(null);
@@ -102,7 +96,6 @@ function App() {
 
     if (status === "result" && finalImage) {
       setShowResultActions(false);
-
       timer = setTimeout(() => {
         setShowResultActions(true);
       }, 1600);
@@ -117,7 +110,6 @@ function App() {
     return () => {
       stopCameraTracks();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function loadSpaceFromUrl() {
@@ -168,9 +160,7 @@ function App() {
       }, 50);
     } catch (err) {
       console.error(err);
-      setError(
-        "No se pudo acceder a la camara. Revisa permisos y usa HTTPS o localhost."
-      );
+      setError("No se pudo acceder a la camara. Revisa permisos y usa HTTPS o localhost.");
       setStatus("idle");
     }
   }
@@ -270,13 +260,7 @@ function App() {
       setStatus("result");
     } catch (err) {
       console.error(err);
-
-      setError(
-        `No se pudo crear la postal. Falta o falla este marco: ${
-          currentSpace?.frame || "sin marco"
-        }`
-      );
-
+      setError(`No se pudo crear la postal. Falta o falla este marco: ${currentSpace?.frame || "sin marco"}`);
       setFinalImage(null);
       setStatus("idle");
     }
@@ -475,7 +459,64 @@ function App() {
                   </div>
 
                   <button className="startButton" onClick={startCamera}>
-                    <span>Gracias por tu visita</span>
+                    Activar camara
+                  </button>
+                </>
+              )}
+
+              {error && <p className="error">{error}</p>}
+            </div>
+          )}
+
+          {(status === "starting" || status === "camera") && currentSpace && (
+            <div className="cameraBox">
+              <video ref={videoRef} autoPlay playsInline muted />
+
+              <div className="cameraTopBar">
+                <div>
+                  <span className="placeLabel">{currentSpace.name}</span>
+                  <strong>{currentSpace.instruction}</strong>
+                </div>
+              </div>
+
+              <div className="overlay">
+                <div className="centerPhotoArea"></div>
+
+                <div className="instructions">
+                  <strong>Ubicate en el centro libre del marco</strong>
+                  <span>Ese espacio sera el centro de tu postal.</span>
+                </div>
+              </div>
+
+              <button
+                className={`captureButton ${isCapturing ? "capturing" : ""}`}
+                onClick={capturePhoto}
+                aria-label="Sacar foto"
+              >
+                <span></span>
+              </button>
+
+              <button className="closeCameraButton" onClick={stopCamera}>
+                Salir
+              </button>
+            </div>
+          )}
+
+          {status === "processing" && (
+            <div className="processing">
+              <div className="spinner"></div>
+              <h2>Creando postal...</h2>
+              <p>Combinando tu foto con el marco del espacio.</p>
+            </div>
+          )}
+
+          {status === "result" && finalImage && (
+            <div className="result">
+              <div className="resultCard">
+                <img src={finalImage} alt="Postal generada" />
+
+                <div className="thanksMessage">
+                  <span>Gracias por tu visita</span>
                   <strong>{currentSpace?.name}</strong>
                   <p>
                     Tu postal cultural ya esta lista para guardar o compartir.
@@ -540,7 +581,8 @@ function App() {
             )}
 
             <p>
-              Cada espacio cultural tiene un marco propio. Saca tu foto en el centro, descarga tu postal y comparti tu visita.
+              Cada espacio cultural tiene un marco propio. Saca tu foto en el
+              centro, descarga tu postal y comparti tu visita.
             </p>
           </div>
 
